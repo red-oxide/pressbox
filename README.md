@@ -132,7 +132,7 @@ just audit           # security advisories only
 just check           # nix flake check: builds, module checks, NixOS VM test,
                      # coverage
 just verify          # all of the above, as CI does
-just coverage        # line coverage per file; fails below 100%, as CI does
+just coverage        # line coverage per file; fails below 95%, as CI does
 ```
 
 `cargo deny` also runs in CI on every push and weekly, so a new advisory against

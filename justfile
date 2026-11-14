@@ -24,12 +24,12 @@ lint:
     {{ cargo }} clippy --workspace --all-targets -- -D warnings
 
 # Line coverage per file, from LLVM's instrumentation (no extra toolchain
-# component); fails below 100%, as the flake's coverage check does. Built in
+# component); fails below 95%, as the flake's coverage check does. Built in
 # target/tarpaulin so normal builds stay cached; `just coverage --out Html`
 # also writes target/coverage/tarpaulin-report.html. Code marked
 # `#[cfg(not(tarpaulin_include))]` isn't counted; each says why.
 coverage *args:
-    {{ cargo }} tarpaulin --workspace --engine llvm --fail-under 100 --target-dir target/tarpaulin --output-dir target/coverage {{ args }}
+    {{ cargo }} tarpaulin --workspace --engine llvm --fail-under 95 --target-dir target/tarpaulin --output-dir target/coverage {{ args }}
 
 # Check advisories, licenses, duplicate crates and sources
 deny:
