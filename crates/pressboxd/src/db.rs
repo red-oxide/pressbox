@@ -218,6 +218,13 @@ const MIGRATIONS: &[&str] = &[
     ) WITHOUT ROWID;
     CREATE INDEX queue_by_item ON queue (item_id);
     ",
+    // 10: fetch feeds with no artwork in full once. A 304 used to clear a
+    // feed's artwork and medium, so feeds that answer their ETag lost them
+    // after the first unchanged fetch.
+    r"
+    UPDATE sources SET etag = NULL, last_modified = NULL, next_fetch = 0
+    WHERE image IS NULL;
+    ",
 ];
 
 /// The most episodes a user's queue holds.
@@ -262,6 +269,9 @@ pub struct FetchResult {
     pub image: Option<String>,
     pub medium: Option<String>,
     pub error: Option<String>,
+    /// The server answered 304: the feed is as last read, so its artwork and
+    /// medium stay as stored rather than being cleared.
+    pub not_modified: bool,
     /// When to fetch next (Unix seconds).
     pub next_fetch: i64,
     pub fail_count: u32,
@@ -632,7 +642,9 @@ impl Db {
                 "UPDATE sources SET last_fetched = ?2, last_error = NULL,
                     etag = ?3, last_modified = ?4,
                     title = COALESCE(?5, title), site_url = COALESCE(?6, site_url),
-                    next_fetch = ?7, fail_count = 0, image = ?8, medium = ?9
+                    next_fetch = ?7, fail_count = 0,
+                    image = CASE WHEN ?10 THEN image ELSE ?8 END,
+                    medium = CASE WHEN ?10 THEN medium ELSE ?9 END
                  WHERE url = ?1",
                 params![
                     url,
@@ -644,6 +656,7 @@ impl Db {
                     result.next_fetch,
                     result.image,
                     result.medium,
+                    result.not_modified,
                 ],
             )?;
         }
@@ -2276,6 +2289,45 @@ mod tests {
         db.set_queue(chris, &[]).unwrap();
         assert_eq!(db.prune(A, 2, None).unwrap(), 1);
         assert!(db.item(chris, oldest).unwrap().is_none());
+    }
+
+    #[test]
+    fn not_modified_keeps_artwork() {
+        let (db, chris, _) = two_users();
+        let image = |db: &Db| {
+            let feeds = db.feeds(chris).unwrap();
+            let feed = feeds.iter().find(|f| f.url == A).unwrap();
+            (feed.image.clone(), feed.medium.clone())
+        };
+        db.record_fetch(
+            A,
+            1,
+            &FetchResult {
+                etag: Some("\"e\"".into()),
+                image: Some("https://a.example/art.png".into()),
+                medium: Some("podcast".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        db.record_fetch(
+            A,
+            2,
+            &FetchResult {
+                etag: Some("\"e\"".into()),
+                not_modified: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let kept = (
+            Some("https://a.example/art.png".to_owned()),
+            Some("podcast".to_owned()),
+        );
+        assert_eq!(image(&db), kept);
+        // A fresh read without them clears them.
+        db.record_fetch(A, 3, &FetchResult::default()).unwrap();
+        assert_eq!(image(&db), (None, None));
     }
 
     #[test]

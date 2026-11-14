@@ -159,6 +159,7 @@ async fn refresh_one(state: Arc<AppState>, target: FetchTarget) -> Option<usize>
             FetchResult {
                 etag: target.etag.clone(),
                 last_modified: target.last_modified.clone(),
+                not_modified: true,
                 ..Default::default()
             },
             Vec::new(),
@@ -529,10 +530,17 @@ pub fn parse_raw(body: &[u8], uri: Option<&str>) -> Result<(FetchResult, Vec<Raw
         .parse(body)?;
     let feed_url = uri.unwrap_or_default();
     // RSS media tags, by item (feed-rs keeps the feed's order). If the
-    // counts differ the two parsers disagree about the feed; skip them.
-    let rss = media::rss(body, feed_url).filter(|m| m.items.len() == feed.entries.len());
-    let (image, medium, mut rss_items) = match rss {
-        Some(m) => (m.image, m.medium, m.items.into_iter()),
+    // counts differ the two parsers disagree about the items; skip theirs,
+    // but keep the channel's artwork and medium.
+    let (image, medium, mut rss_items) = match media::rss(body, feed_url) {
+        Some(m) => {
+            let items = if m.items.len() == feed.entries.len() {
+                m.items
+            } else {
+                Vec::new()
+            };
+            (m.image, m.medium, items.into_iter())
+        }
         None => (None, None, Vec::new().into_iter()),
     };
     let items = feed
