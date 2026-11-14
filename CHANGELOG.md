@@ -31,6 +31,7 @@ own releases.
   artwork after the first fetch with nothing new; the upgrade fetches feeds with
   no artwork in full once to get it back. An RSS feed whose items the two
   parsers count differently keeps its channel artwork and medium too.
+
 - Podcasts (Podcasting 2.0). Items carry their audio and video as `media`: the
   RSS `<enclosure>` (or Atom enclosure link, or JSON Feed attachment), any
   `podcast:alternateEnclosure`s (video, other bitrates, HLS), and the episode's
