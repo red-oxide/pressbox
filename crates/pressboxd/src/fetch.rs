@@ -534,12 +534,8 @@ pub fn parse_raw(body: &[u8], uri: Option<&str>) -> Result<(FetchResult, Vec<Raw
     // but keep the channel's artwork and medium.
     let (image, medium, mut rss_items) = match media::rss(body, feed_url) {
         Some(m) => {
-            let items = if m.items.len() == feed.entries.len() {
-                m.items
-            } else {
-                Vec::new()
-            };
-            (m.image, m.medium, items.into_iter())
+            let items = Some(m.items).filter(|items| items.len() == feed.entries.len());
+            (m.image, m.medium, items.unwrap_or_default().into_iter())
         }
         None => (None, None, Vec::new().into_iter()),
     };
