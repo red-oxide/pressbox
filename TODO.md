@@ -67,22 +67,23 @@ new here; tvOS uses the artwork cache above.
   `services.pressbox.feeds`. Dropped once the feed appears in the config.
 - [ ] `podcast:guid` on feeds: the key that podroll, podping and value
   recipients refer to shows by.
-- [ ] Podroll: parse `podcast:podroll` into `Feed.podroll` (`{guid, url?,
-  title?}`), marking shows you already follow.
-- [ ] Podping: listen for podpings (the Hive stream, or a podping.cloud
-  relay) for followed feeds' URLs and refresh those feeds at once. Off by
-  default in the NixOS module.
-- [ ] Person: parse channel and item `podcast:person` (`{name, role, group,
-  img?, href?}`) into `Feed.persons` and `media.persons`. Linking to a
-  person's other shows works across the feeds the server knows.
+- [ ] Podroll: parse `podcast:podroll` into `Feed.podroll`
+  (`{guid, url?, title?}`), marking shows you already follow.
+- [ ] Podping: listen for podpings (the Hive stream, or a podping.cloud relay)
+  for followed feeds' URLs and refresh those feeds at once. Off by default
+  in the NixOS module.
+- [ ] Person: parse channel and item `podcast:person`
+  (`{name, role, group, img?, href?}`) into `Feed.persons` and
+  `media.persons`. Linking to a person's other shows works across the feeds
+  the server knows.
 - [ ] Funding: parse `podcast:funding` into `Feed.funding` (`{url, title}`).
-- [ ] Live items: parse `podcast:liveItem` (status, start, end, enclosures)
-  as items with a `live` field, poll feeds with a pending or live item
-  more often, and let `GET /api/v1/items` filter on `live`.
+- [ ] Live items: parse `podcast:liveItem` (status, start, end, enclosures) as
+  items with a `live` field, poll feeds with a pending or live item more
+  often, and let `GET /api/v1/items` filter on `live`.
 - [ ] Value4Value: parse channel and item `podcast:value` and
-  `podcast:valueTimeSplit` (recipients, splits, time ranges) into
-  `value`, so the app can stream sats and send boosts without parsing the
-  feed itself.
+  `podcast:valueTimeSplit` (recipients, splits, time ranges) into `value`,
+  so the app can stream sats and send boosts without parsing the feed
+  itself.
 
 ## Project
 
