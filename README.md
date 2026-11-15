@@ -140,9 +140,8 @@ a dependency shows up without a code change. Its allowed licenses are in
 `deny.toml`; anything else needs a deliberate edit there.
 
 Changes are recorded in [CHANGELOG.md](CHANGELOG.md), and what's planned in
-[TODO.md](TODO.md). A release bumps `version`
-in `Cargo.toml`, moves the changelog's entries under the new version, and is
-tagged `vX.Y.Z`.
+[TODO.md](TODO.md). A release bumps `version` in `Cargo.toml`, moves the
+changelog's entries under the new version, and is tagged `vX.Y.Z`.
 
 To run the server locally, write a `pressbox.toml` (same keys as the module
 generates: `listen`, `database`, `refresh_interval`, `max_items_per_feed`,
