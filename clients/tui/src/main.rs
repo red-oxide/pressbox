@@ -126,7 +126,10 @@ fn pair(
 
 /// Writes a file only the owner can read.
 fn write_private(path: &Path, contents: &str) -> Result<()> {
-    use std::{io::Write, os::unix::fs::OpenOptionsExt};
+    use std::{
+        io::Write,
+        os::unix::fs::{OpenOptionsExt, PermissionsExt},
+    };
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .create(true)
@@ -134,6 +137,9 @@ fn write_private(path: &Path, contents: &str) -> Result<()> {
         .mode(0o600)
         .open(path)
         .with_context(|| format!("writing {}", path.display()))?;
+    // `mode` only counts when the file is created: one already there (from
+    // a hand-written token, say) keeps its own until told otherwise.
+    file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
     writeln!(file, "{contents}")?;
     Ok(())
 }
@@ -358,6 +364,13 @@ mod tests {
         assert_eq!(read_token(&token).unwrap(), "secret");
         let mode = std::fs::metadata(&token).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600, "only the owner can read it");
+
+        // A token file that was readable by others is closed when rewritten.
+        std::fs::set_permissions(&token, std::fs::Permissions::from_mode(0o644)).unwrap();
+        write_private(&token, "newer").unwrap();
+        assert_eq!(read_token(&token).unwrap(), "newer");
+        let mode = std::fs::metadata(&token).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
         std::fs::remove_dir_all(dir).unwrap();
     }
 

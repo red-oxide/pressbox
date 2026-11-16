@@ -115,9 +115,22 @@ pub struct Mpv {
     ipc: Option<Ipc>,
 }
 
+/// Where mpv's socket goes: the user's runtime directory (`runtime`, from
+/// `XDG_RUNTIME_DIR`), which only they can reach. Whoever can connect to the
+/// socket controls mpv, so the shared temporary directory, where another
+/// user could have put a socket of the same name first, is only the
+/// fallback.
+fn socket_dir(runtime: Option<std::ffi::OsString>) -> PathBuf {
+    runtime
+        .map(PathBuf::from)
+        .filter(|dir| dir.is_absolute())
+        .unwrap_or_else(std::env::temp_dir)
+}
+
 impl Mpv {
     pub fn new(program: &str) -> Self {
-        let socket = std::env::temp_dir().join(format!("pressbox-mpv-{}.sock", std::process::id()));
+        let socket = socket_dir(std::env::var_os("XDG_RUNTIME_DIR"))
+            .join(format!("pressbox-mpv-{}.sock", std::process::id()));
         Self {
             program: program.to_owned(),
             socket,
@@ -269,6 +282,19 @@ pub mod tests {
 
     fn socket(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("pressbox-test-{name}-{}.sock", std::process::id()))
+    }
+
+    #[test]
+    fn the_socket_goes_in_the_runtime_directory() {
+        assert_eq!(
+            socket_dir(Some("/run/user/1000".into())),
+            PathBuf::from("/run/user/1000")
+        );
+        // Unset, or not a place: the temporary directory will have to do.
+        assert_eq!(socket_dir(None), std::env::temp_dir());
+        assert_eq!(socket_dir(Some("".into())), std::env::temp_dir());
+        assert_eq!(socket_dir(Some("relative".into())), std::env::temp_dir());
+        assert!(Mpv::new("mpv").socket.is_absolute());
     }
 
     #[test]

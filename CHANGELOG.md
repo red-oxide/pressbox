@@ -148,6 +148,10 @@ own releases.
 - A server address that isn't one (`http://bad host`) is reported when you press
   Pair.
 
+- Saving a token over an existing token file closes it to other users (mode
+  0600); the mode was only set when the file was created. The same goes for
+  `pressbox pair` in the terminal client.
+
 ### Terminal client
 
 - Up Next, a row under Starred that lists the server's queue: `a` adds an
@@ -164,6 +168,10 @@ own releases.
   loaded yet.
 - `u` cycles unread, all and read items, so read posts can be listed on their
   own.
+
+- mpv's control socket is made in `$XDG_RUNTIME_DIR`, which only you can reach,
+  instead of the shared temporary directory (still the fallback when it is
+  unset).
 
 ## [0.1.0] - 2026-11-07
 

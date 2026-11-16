@@ -121,7 +121,16 @@ fn write_private(path: &Path, contents: &str) -> Result<()> {
     use std::io::Write;
     options
         .open(path)
-        .and_then(|mut f| f.write_all(contents.as_bytes()))
+        .and_then(|mut f| {
+            // `mode` only counts when the file is created: one already
+            // there keeps its own until told otherwise.
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                f.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+            }
+            f.write_all(contents.as_bytes())
+        })
         .with_context(|| format!("writing {}", path.display()))
 }
 
@@ -165,6 +174,11 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&token).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o600);
+            // A file that was readable by others is closed when rewritten.
+            std::fs::set_permissions(&token, std::fs::Permissions::from_mode(0o644)).unwrap();
+            write_private(&token, "abc\n").unwrap();
             let mode = std::fs::metadata(&token).unwrap().permissions().mode();
             assert_eq!(mode & 0o777, 0o600);
         }
