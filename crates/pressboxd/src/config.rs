@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 //! Server configuration. On NixOS this file is generated from
-//! `services.pressbox` by the module in `nix/nixos-module.nix`.
+//! `services.pressbox` by the module in `modules/nixos.nix`.
 
 use std::{collections::BTreeMap, net::SocketAddr, path::PathBuf};
 
