@@ -39,6 +39,7 @@
               tokenFile = token;
               openFirewall = true;
               behindProxy = true;
+              fetchPrivateAddresses = true;
               maxAgeDays = 90;
               inherit feeds;
               users = {
@@ -144,6 +145,7 @@
               and .feeds.lwn == { url: "https://lwn.net/headlines/rss", tags: [], full_text: false }
               and .feeds.nixos.full_text == true
               and .behind_proxy == true
+              and .fetch_private_addresses == true
               and .max_age_days == 90
               and .feeds.nixos.title == "NixOS"
               and .feeds.nixos.tags == ["nix"]

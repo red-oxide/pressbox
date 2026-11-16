@@ -38,6 +38,12 @@ pub struct Config {
     /// server: client addresses then come from its `X-Forwarded-For`.
     #[serde(default)]
     pub behind_proxy: bool,
+    /// Let the URLs feeds supply (article pages for `full_text`, chapters,
+    /// transcripts) be fetched from this machine and private networks too.
+    /// Off, only public addresses are; the feeds themselves are fetched
+    /// from wherever their `url` says either way.
+    #[serde(default)]
+    pub fetch_private_addresses: bool,
     /// Where `pressboxctl backup` writes. Defaults to `backups/` next to the
     /// database.
     #[serde(default)]

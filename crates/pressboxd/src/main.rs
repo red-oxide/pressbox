@@ -47,7 +47,11 @@ pub struct AppState {
     /// Read-only connections; empty for in-memory databases (tests).
     readers: Vec<Mutex<Db>>,
     next_reader: std::sync::atomic::AtomicUsize,
+    /// Fetches the feeds the configuration names.
     http: reqwest::Client,
+    /// Fetches what feeds link to (articles, chapters, transcripts): public
+    /// addresses only, unless `fetch_private_addresses` is set.
+    links: fetch::Links,
     /// The static token from `token_file` or the systemd credential.
     token: Option<String>,
     refresh: Notify,
@@ -72,6 +76,7 @@ impl AppState {
             readers: Vec::new(),
             next_reader: std::sync::atomic::AtomicUsize::new(0),
             http: fetch::client()?,
+            links: fetch::Links::public()?,
             token,
             refresh: Notify::new(),
             max_items_per_feed,
@@ -222,6 +227,9 @@ impl Server {
             .with_readers(&config.database, READERS)?;
         state.backup_dir = config.backup_dir();
         state.behind_proxy = config.behind_proxy;
+        if config.fetch_private_addresses {
+            state.links = fetch::Links::unrestricted(state.http.clone());
+        }
         state.max_age_days = config.max_age_days;
         let state = Arc::new(state);
 
@@ -406,6 +414,7 @@ mod tests {
             .unwrap()
             .block_on(async {
                 let server = Server::start(&config, None).await.unwrap();
+                assert!(server.state.links.public_only(), "unless configured");
                 let address = server.address;
                 assert_ne!(address.port(), 0, "the port actually bound");
                 let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
@@ -459,7 +468,7 @@ mod tests {
         let _env = systemd::ENV_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let (config, dir) = server_config("inherit", "");
+        let (config, dir) = server_config("inherit", "fetch_private_addresses = true");
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -469,6 +478,7 @@ mod tests {
             socket.set_nonblocking(true).unwrap();
             let address = socket.local_addr().unwrap();
             let server = Server::start(&config, Some(socket)).await.unwrap();
+            assert!(!server.state.links.public_only());
             assert_eq!(server.address, address, "`listen` is ignored");
             server.run(async {}).await.unwrap();
 

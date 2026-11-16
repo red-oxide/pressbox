@@ -73,6 +73,12 @@ its main content (the article, without navigation, ads or comments), sanitized
 like feed HTML. Clients show it in place of the feed's text, and search covers
 it. Pages without enough text to be an article keep the feed's own text.
 
+Article pages, and the chapters and transcripts podcasts link to, are URLs the
+feed supplies, so pressbox only fetches them from public addresses: a feed can't
+point it at your router or another service on your network. If a feed on your
+own network links to pages there, set `fetchPrivateAddresses = true`. Feeds
+themselves are fetched from wherever their `url` says.
+
 Feed ids (the attribute names) may contain letters, digits, `-` and `_`. The
 generated config is checked by `pressboxd --check` at build time, so a bad feed
 fails `nixos-rebuild`, not the service.
@@ -82,7 +88,7 @@ those users, except starred ones: the feed stays under "removed" in their
 clients until they unstar them. Adding it back resumes it.
 
 | Option | Default | Notes |
-| ------------------ | ----------- | ------------------------------------------------------------------------ |
+| ----------------------- | ----------- | ------------------------------------------------------------------------ |
 | `address` | `127.0.0.1` | `0.0.0.0` or `::` to listen on all interfaces |
 | `port` | `8470` | |
 | `openFirewall` | `false` | |
@@ -90,6 +96,7 @@ clients until they unstar them. Adding it back resumes it.
 | `maxItemsPerFeed` | `500` | Starred items are never pruned |
 | `maxAgeDays` | `null` | Remove items older than this (starred ones stay) |
 | `behindProxy` | `false` | Behind a reverse proxy or `tailscale serve`; see [Pairing](./pairing.md) |
+| `fetchPrivateAddresses` | `false` | Also fetch what feeds link to from private addresses |
 | `backup.enable` | `true` | Daily copy to `/var/lib/private/pressbox/backups` |
 | `backup.schedule` | `daily` | systemd OnCalendar |
 | `backup.keep` | `14` | |

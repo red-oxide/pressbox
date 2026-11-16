@@ -88,6 +88,7 @@ let
     refresh_interval = cfg.refreshInterval;
     max_items_per_feed = cfg.maxItemsPerFeed;
     behind_proxy = cfg.behindProxy;
+    fetch_private_addresses = cfg.fetchPrivateAddresses;
     feeds = toFeedSettings cfg.feeds;
     users = lib.mapAttrs (_: user: {
       inherit (user) admin;
@@ -146,6 +147,20 @@ in
         makes pressboxd use the address the proxy appends to
         `X-Forwarded-For` instead. Leave it off when clients connect
         directly, or anyone could pick their own address.
+      '';
+    };
+
+    fetchPrivateAddresses = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Let the URLs feeds supply (article pages for `fullText`, podcast
+        chapters and transcripts) be fetched from this machine and private
+        networks too. By default only public addresses are, so a feed can't
+        make pressboxd send requests to your router or other local services.
+        Turn it on if a feed on your own network links to pages or files
+        there. The feeds themselves are fetched from wherever their `url`
+        says either way.
       '';
     };
 

@@ -349,7 +349,7 @@ async fn media_file<T: serde::Serialize>(
     if let Some(json) = kept {
         return Ok(json_response(json));
     }
-    let body = fetch::download(&state.http, &url, MAX_MEDIA_FILE)
+    let body = fetch::download(&state.links, &url, MAX_MEDIA_FILE)
         .await
         .map_err(|e| {
             tracing::warn!(url, "fetching media file: {e}");
@@ -1129,6 +1129,7 @@ mod tests {
         .unwrap();
         let mut state = AppState::new(db, T.map(str::to_owned), 500).unwrap();
         state.http = reqwest::Client::builder().no_proxy().build().unwrap();
+        state.links = fetch::Links::unrestricted(state.http.clone());
         Arc::new(state)
     }
 

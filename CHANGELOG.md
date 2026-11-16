@@ -104,6 +104,14 @@ own releases.
   add the new id and keep the old one as a removed feed while it had starred
   items, which were then listed twice.
 
+- The URLs feeds supply (article pages for `fullText`, podcast chapters and
+  transcripts) are only fetched from public addresses, by name, by address or
+  after a redirect, so a feed cannot make pressboxd send requests to the machine
+  it runs on or to the local network. `fetchPrivateAddresses = true`
+  (`fetch_private_addresses` in `pressbox.toml`) lifts this for feeds on your
+  own network. Feeds themselves are still fetched from wherever their `url`
+  says.
+
 ### Desktop client
 
 - Up Next: the server's queue in the sidebar, Add to Up Next and Play next on

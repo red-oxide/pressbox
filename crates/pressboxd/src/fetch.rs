@@ -8,7 +8,12 @@
 //! max-age` asks for that. After a failure the delay doubles each time (up to
 //! a day), and a `Retry-After` from a 429 or 503 is honored.
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::Arc,
+    time::Duration,
+};
 
 use anyhow::Result;
 use futures::StreamExt;
@@ -40,8 +45,8 @@ const MIN_ARTICLE_CHARS: usize = 200;
 /// The longest pressbox waits between fetches of a feed, whatever the reason.
 pub const MAX_DELAY: u64 = 24 * 60 * 60;
 
-pub fn client() -> Result<reqwest::Client> {
-    Ok(reqwest::Client::builder()
+fn builder() -> reqwest::ClientBuilder {
+    reqwest::Client::builder()
         .user_agent(concat!(
             "pressbox/",
             env!("CARGO_PKG_VERSION"),
@@ -49,7 +54,170 @@ pub fn client() -> Result<reqwest::Client> {
         ))
         .timeout(Duration::from_secs(30))
         .connect_timeout(Duration::from_secs(10))
-        .build()?)
+}
+
+/// The client for the feeds the configuration names. Whoever wrote the
+/// configuration chose those URLs, so they may be anywhere, the local
+/// network included.
+pub fn client() -> Result<reqwest::Client> {
+    Ok(builder().build()?)
+}
+
+/// Whether an address is out on the internet, rather than this machine, the
+/// local network, a VPN's range (CGNAT, which Tailscale uses) or a range
+/// set aside for something else.
+pub fn is_public(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ip) => {
+            let [a, b, c, _] = ip.octets();
+            !(ip.is_unspecified()
+                || ip.is_loopback()
+                || ip.is_private()
+                || ip.is_link_local()
+                || ip.is_broadcast()
+                || ip.is_multicast()
+                || ip.is_documentation()
+                // "This network", CGNAT, protocol assignments, benchmarking
+                // and reserved.
+                || a == 0
+                || (a == 100 && b & 0xc0 == 64)
+                || (a == 192 && b == 0 && c == 0)
+                || (a == 198 && b & 0xfe == 18)
+                || a >= 240)
+        }
+        IpAddr::V6(ip) => {
+            let s = ip.segments();
+            let embedded = || Ipv4Addr::from((u32::from(s[6]) << 16) | u32::from(s[7]));
+            if let Some(v4) = ip.to_ipv4_mapped() {
+                return is_public(v4.into());
+            }
+            // NAT64 reaches the IPv4 address it carries.
+            if s[..6] == [0x64, 0xff9b, 0, 0, 0, 0] {
+                return is_public(embedded().into());
+            }
+            !(ip.is_multicast()
+                // Unspecified, loopback and IPv4-compatible.
+                || s[..6] == [0; 6]
+                // Unique local, link-local and documentation.
+                || s[0] & 0xfe00 == 0xfc00
+                || s[0] & 0xffc0 == 0xfe80
+                || (s[0] == 0x2001 && s[1] == 0xdb8))
+        }
+    }
+}
+
+/// Whether a URL names a non-public address outright (`http://10.0.0.1/`).
+/// Host names are checked when they are resolved, by [`PublicOnly`].
+fn names_private_address(url: &reqwest::Url) -> bool {
+    match url.host() {
+        Some(url::Host::Ipv4(ip)) => !is_public(ip.into()),
+        Some(url::Host::Ipv6(ip)) => !is_public(ip.into()),
+        Some(url::Host::Domain(_)) | None => false,
+    }
+}
+
+const NOT_PUBLIC: &str = "not a public address";
+
+/// Resolves host names to their public addresses only. The addresses
+/// returned are the ones connected to, so a name can't pass the check and
+/// then resolve to something else.
+struct PublicOnly;
+
+impl reqwest::dns::Resolve for PublicOnly {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        Box::pin(async move {
+            let host = name.as_str();
+            let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host, 0))
+                .await?
+                .filter(|a| is_public(a.ip()))
+                .collect();
+            if addrs.is_empty() {
+                return Err(format!("{host} is {NOT_PUBLIC}").into());
+            }
+            Ok(Box::new(addrs.into_iter()) as reqwest::dns::Addrs)
+        })
+    }
+}
+
+/// Follows up to ten redirects, as reqwest does itself, but none to a
+/// non-public address.
+fn public_redirects() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|attempt| {
+        if attempt.previous().len() >= 10 {
+            attempt.error("too many redirects")
+        } else if names_private_address(attempt.url()) {
+            let to = attempt.url().to_string();
+            attempt.error(format!("redirected to {to}, {NOT_PUBLIC}"))
+        } else {
+            attempt.follow()
+        }
+    })
+}
+
+/// A client that only reaches public addresses, whatever a URL, its DNS or
+/// a redirect says. (Through an HTTP proxy, if the environment sets one,
+/// the proxy resolves names, and only addresses written out are refused.)
+fn public_builder() -> reqwest::ClientBuilder {
+    builder()
+        .dns_resolver(Arc::new(PublicOnly))
+        .redirect(public_redirects())
+}
+
+/// Fetches the URLs feeds supply: article pages, chapters and transcripts.
+///
+/// A feed's author picks those, not whoever runs the server, and pressboxd
+/// often sits on a home network next to routers, printers and other
+/// services that trust local requests. So unless the configuration sets
+/// `fetch_private_addresses`, these fetches only go to public addresses.
+#[derive(Clone)]
+pub struct Links {
+    http: reqwest::Client,
+    public_only: bool,
+}
+
+impl Links {
+    /// Reaches public addresses only.
+    pub fn public() -> Result<Self> {
+        Ok(Self {
+            http: public_builder().build()?,
+            public_only: true,
+        })
+    }
+
+    #[cfg(test)]
+    pub fn public_only(&self) -> bool {
+        self.public_only
+    }
+
+    /// Reaches whatever `http` does.
+    pub fn unrestricted(http: reqwest::Client) -> Self {
+        Self {
+            http,
+            public_only: false,
+        }
+    }
+
+    async fn get(&self, url: &str) -> Result<reqwest::Response, String> {
+        let parsed = reqwest::Url::parse(url).map_err(|e| e.to_string())?;
+        if self.public_only && names_private_address(&parsed) {
+            return Err(format!("{url} is {NOT_PUBLIC}"));
+        }
+        let resp = self.http.get(parsed).send().await.map_err(|e| {
+            // reqwest's own message stops at "error sending request"; the
+            // reason (a refused address, say) is further down.
+            let mut message = e.to_string();
+            let mut source = std::error::Error::source(&e);
+            while let Some(cause) = source {
+                message.push_str(&format!(": {cause}"));
+                source = cause.source();
+            }
+            message
+        })?;
+        if !resp.status().is_success() {
+            return Err(format!("HTTP {}", resp.status()));
+        }
+        Ok(resp)
+    }
 }
 
 pub fn now() -> i64 {
@@ -322,7 +490,7 @@ async fn fetch_articles(state: &Arc<AppState>, feed: &str) {
         }
     };
     for (id, url) in pending {
-        let article = match fetch_page(&state.http, &url).await {
+        let article = match fetch_page(&state.links, &url).await {
             Ok(html) => {
                 let page = url.clone();
                 tokio::task::spawn_blocking(move || extract(&String::from_utf8_lossy(&html), &page))
@@ -349,19 +517,13 @@ async fn fetch_articles(state: &Arc<AppState>, feed: &str) {
 
 /// Fetches a small file (a podcast's chapters or transcript), up to `max`
 /// bytes.
-pub async fn download(http: &reqwest::Client, url: &str, max: usize) -> Result<Vec<u8>, String> {
-    let resp = http.get(url).send().await.map_err(|e| e.to_string())?;
-    if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status()));
-    }
+pub async fn download(links: &Links, url: &str, max: usize) -> Result<Vec<u8>, String> {
+    let resp = links.get(url).await?;
     read_limited(resp, max, "file").await
 }
 
-async fn fetch_page(http: &reqwest::Client, url: &str) -> Result<Vec<u8>, String> {
-    let resp = http.get(url).send().await.map_err(|e| e.to_string())?;
-    if !resp.status().is_success() {
-        return Err(format!("HTTP {}", resp.status()));
-    }
+async fn fetch_page(links: &Links, url: &str) -> Result<Vec<u8>, String> {
+    let resp = links.get(url).await?;
     let html = resp
         .headers()
         .get(CONTENT_TYPE)
@@ -989,6 +1151,127 @@ mod tests {
         assert_eq!(oldest_kept(&undated, 7), None);
     }
 
+    #[test]
+    fn tells_public_addresses_from_the_rest() {
+        for (ip, public) in [
+            ("93.184.216.34", true),
+            ("100.63.255.255", true),
+            ("100.128.0.1", true),
+            ("198.17.0.1", true),
+            ("2606:2800:220:1::1", true),
+            ("64:ff9b::5db8:d822", true),
+            ("::ffff:93.184.216.34", true),
+            ("0.0.0.0", false),
+            ("0.1.2.3", false),
+            ("10.1.2.3", false),
+            ("100.64.0.1", false),
+            ("100.127.255.254", false),
+            ("127.0.0.1", false),
+            ("169.254.169.254", false),
+            ("172.16.0.1", false),
+            ("192.0.0.8", false),
+            ("192.0.2.1", false),
+            ("192.168.1.1", false),
+            ("198.18.0.1", false),
+            ("198.19.255.255", false),
+            ("224.0.0.1", false),
+            ("240.0.0.1", false),
+            ("255.255.255.255", false),
+            ("::", false),
+            ("::1", false),
+            ("::10.0.0.1", false),
+            ("::ffff:127.0.0.1", false),
+            ("::ffff:192.168.1.1", false),
+            ("64:ff9b::a00:1", false),
+            ("fc00::1", false),
+            ("fd12:3456::1", false),
+            ("fe80::1", false),
+            ("ff02::1", false),
+            ("2001:db8::1", false),
+        ] {
+            assert_eq!(is_public(ip.parse().unwrap()), public, "{ip}");
+        }
+    }
+
+    #[tokio::test]
+    async fn links_only_reach_public_addresses() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        use axum::{Router, response::Redirect, routing::get};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let by_name = format!("http://localhost:{}", addr.port());
+        let hits = Arc::new(AtomicUsize::new(0));
+        let app = {
+            let hits = hits.clone();
+            let to_address = format!("http://{addr}/file");
+            let around = format!("{by_name}/loop");
+            Router::new()
+                .route(
+                    "/file",
+                    get(move || async move {
+                        hits.fetch_add(1, Ordering::SeqCst);
+                        "ok"
+                    }),
+                )
+                .route(
+                    "/to-address",
+                    get(move || async move { Redirect::temporary(&to_address) }),
+                )
+                .route(
+                    "/loop",
+                    get(move || async move { Redirect::temporary(&around) }),
+                )
+        };
+        tokio::spawn(async move { axum::serve(listener, app).await });
+
+        // Refused whether the address is written out or behind a name.
+        let public = Links {
+            http: public_builder().no_proxy().build().unwrap(),
+            public_only: true,
+        };
+        let error = download(&public, &format!("http://{addr}/file"), 100)
+            .await
+            .unwrap_err();
+        assert!(error.ends_with(NOT_PUBLIC), "{error}");
+        let error = download(&public, &format!("{by_name}/file"), 100)
+            .await
+            .unwrap_err();
+        assert!(
+            error.contains("localhost is not a public address"),
+            "{error}"
+        );
+        assert!(fetch_page(&public, "no url at all").await.is_err());
+        assert!(Links::public().unwrap().public_only());
+
+        // Nor may a redirect lead to one. (With the ordinary resolver, so
+        // the first request gets as far as being redirected.)
+        let redirected = Links::unrestricted(
+            reqwest::Client::builder()
+                .no_proxy()
+                .redirect(public_redirects())
+                .build()
+                .unwrap(),
+        );
+        let error = download(&redirected, &format!("{by_name}/to-address"), 100)
+            .await
+            .unwrap_err();
+        assert!(error.contains("redirected to"), "{error}");
+        assert!(error.ends_with(NOT_PUBLIC), "{error}");
+        let error = download(&redirected, &format!("{by_name}/loop"), 100)
+            .await
+            .unwrap_err();
+        assert!(error.ends_with("too many redirects"), "{error}");
+        assert_eq!(hits.load(Ordering::SeqCst), 0, "nothing got through");
+
+        // `fetch_private_addresses` lifts all of that.
+        let any = Links::unrestricted(reqwest::Client::builder().no_proxy().build().unwrap());
+        assert!(!any.public_only());
+        let body = download(&any, &format!("{by_name}/to-address"), 100).await;
+        assert_eq!(body.unwrap(), b"ok");
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
+    }
+
     #[tokio::test]
     async fn bodies_are_limited_without_content_length() {
         use axum::{Router, body::Body, routing::get};
@@ -1123,6 +1406,7 @@ mod tests {
         let user = db.only_user().unwrap().unwrap().id;
         let mut state = AppState::new(db, None, 100).unwrap();
         state.http = reqwest::Client::builder().no_proxy().build().unwrap();
+        state.links = Links::unrestricted(state.http.clone());
         let state = Arc::new(state);
         let target = |path: &str| {
             let url = format!("http://{addr}/{path}");
@@ -1234,6 +1518,7 @@ mod tests {
             .unwrap();
         let mut state = AppState::new(db, None, 100).unwrap();
         state.http = reqwest::Client::builder().no_proxy().build().unwrap();
+        state.links = Links::unrestricted(state.http.clone());
         Arc::new(state)
     }
 
