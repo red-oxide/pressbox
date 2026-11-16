@@ -122,6 +122,11 @@ own releases.
   client that refreshes often (or a failing feed that asked for a pause with
   `Retry-After`) does not have every feed fetched again each time.
 
+- The transcript served for an episode is one in the show's language when there
+  is one, rather than the best format in any language. A `podcast:transcript`
+  without a `language` gets the channel's as its `lang`, as the specification
+  says, and those are listed first.
+
 ### Desktop client
 
 - Up Next: the server's queue in the sidebar, Add to Up Next and Play next on

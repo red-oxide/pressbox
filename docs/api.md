@@ -88,8 +88,8 @@ everywhere. When an episode ends, clients start the first episode in the queue.
 Queued episodes are kept when a feed's old items are pruned.
 
 `chapters` and `transcript` read the episode's chapters file and its best
-transcript (JSON, then WebVTT, SRT, HTML and plain text) so clients don't have
-to: chapters come as `{start, end?, title?, image?, url?, hidden?}` sorted by
+transcript (one in the show's language before a translation, then JSON, WebVTT,
+SRT, HTML and plain text) so clients don't have to: chapters come as `{start, end?, title?, image?, url?, hidden?}` sorted by
 `start` (`hidden` chapters only change the artwork), and transcripts as
 `{start, end, speaker?, text}` segments, with runs of very short cues joined
 into sentences. Files are fetched once and kept for a week.

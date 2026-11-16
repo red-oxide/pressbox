@@ -50,6 +50,9 @@ pub fn rss(body: &[u8], feed_url: &str) -> Option<RssMedia> {
     let channel = child(root, None, "channel")?;
     let base = Url::parse(feed_url).ok();
     let base = base.as_ref();
+    let language = child_text(channel, None, "language")
+        .map(str::trim)
+        .filter(|l| !l.is_empty());
     let image = child(channel, Some(&[ITUNES]), "image")
         .and_then(|i| i.attribute("href"))
         .or_else(|| child(channel, None, "image").and_then(|i| child_text(i, None, "url")))
@@ -60,7 +63,7 @@ pub fn rss(body: &[u8], feed_url: &str) -> Option<RssMedia> {
     let items = channel
         .children()
         .filter(|n| is(*n, None, "item"))
-        .map(|item| rss_item(item, base))
+        .map(|item| rss_item(item, base, language))
         .collect();
     Some(RssMedia {
         image,
@@ -69,7 +72,9 @@ pub fn rss(body: &[u8], feed_url: &str) -> Option<RssMedia> {
     })
 }
 
-fn rss_item(item: Node<'_, '_>, base: Option<&Url>) -> Option<Media> {
+/// `language` is the channel's, which a transcript is in unless it says
+/// otherwise.
+fn rss_item(item: Node<'_, '_>, base: Option<&Url>, language: Option<&str>) -> Option<Media> {
     let mut enclosures: Vec<Enclosure> = children(item, None, "enclosure")
         .filter_map(|e| {
             Some(Enclosure {
@@ -115,16 +120,24 @@ fn rss_item(item: Node<'_, '_>, base: Option<&Url>) -> Option<Media> {
     let chapters = child(item, Some(&PODCAST), "chapters")
         .and_then(|c| c.attribute("url"))
         .and_then(|u| media_url(u, base));
-    let transcripts = children(item, Some(&PODCAST), "transcript")
+    let mut transcripts: Vec<TranscriptFile> = children(item, Some(&PODCAST), "transcript")
         .filter_map(|t| {
+            let own = t.attribute("language").map(str::trim);
             Some(TranscriptFile {
                 url: media_url(t.attribute("url")?, base)?,
                 mime: mime(t.attribute("type"))?,
-                lang: t.attribute("language").map(str::to_owned),
+                lang: own
+                    .filter(|l| !l.is_empty())
+                    .or(language)
+                    .map(str::to_owned),
                 rel: t.attribute("rel").map(str::to_owned),
             })
         })
         .collect();
+    // The show's own language first (the sort keeps the feed's order
+    // otherwise): `best_transcript` takes the first one's language to be
+    // the one wanted.
+    transcripts.sort_by_key(|t| !same_language(t.lang.as_deref(), language));
     let either = |name| {
         child_text(item, Some(&PODCAST), name)
             .or_else(|| child_text(item, Some(&[ITUNES]), name))
@@ -289,13 +302,29 @@ pub fn chapters(body: &[u8], file_url: &str) -> Option<Chapters> {
     Some(Chapters { chapters })
 }
 
-/// The transcript clients get when an item has several: JSON (timed, with
-/// speakers), then WebVTT, SRT, HTML and plain text.
+/// Whether two language tags name the same language, whatever the region
+/// (`en` and `en-US`). No tag only matches no tag.
+fn same_language(a: Option<&str>, b: Option<&str>) -> bool {
+    let primary = |tag: &str| {
+        let end = tag.find(['-', '_']).unwrap_or(tag.len());
+        tag[..end].to_ascii_lowercase()
+    };
+    a.map(primary) == b.map(primary)
+}
+
+/// The transcript clients get when an item has several: one in the show's
+/// language (the first listed; see `rss_item`) before a translation, then
+/// by format: JSON (timed, with speakers), then WebVTT, SRT, HTML and plain
+/// text.
 pub fn best_transcript(files: &[TranscriptFile]) -> Option<&TranscriptFile> {
+    let wanted = files.first()?.lang.as_deref();
     files
         .iter()
-        .filter_map(|f| Some((transcript_rank(&f.mime)?, f)))
-        .min_by_key(|(rank, _)| *rank)
+        .filter_map(|f| {
+            let translated = !same_language(f.lang.as_deref(), wanted);
+            Some(((translated, transcript_rank(&f.mime)?), f))
+        })
+        .min_by_key(|(order, _)| *order)
         .map(|(_, f)| f)
 }
 
@@ -703,6 +732,52 @@ mod tests {
         );
         assert_eq!(best_transcript(&files[2..3]), None);
         assert_eq!(best_transcript(&[]), None);
+
+        // The show's language (the first listed) beats a better format.
+        let in_language = |mime: &str, lang: Option<&str>| TranscriptFile {
+            lang: lang.map(str::to_owned),
+            ..file(mime)
+        };
+        let files = [
+            in_language("text/html", Some("en-US")),
+            in_language("application/json", Some("es")),
+            in_language("text/vtt", Some("EN")),
+            in_language("application/json", None),
+        ];
+        assert_eq!(best_transcript(&files).unwrap().mime, "text/vtt");
+        // Only a translation can be read: better than nothing.
+        let files = [
+            in_language("application/pdf", Some("en")),
+            in_language("text/plain", Some("es")),
+        ];
+        assert_eq!(best_transcript(&files).unwrap().mime, "text/plain");
+    }
+
+    #[test]
+    fn transcripts_are_in_the_channels_language_unless_they_say() {
+        let feed = r#"<rss version="2.0" xmlns:podcast="https://podcastindex.org/namespace/1.0">
+            <channel><title>T</title><language> en-GB </language>
+              <item><guid>1</guid><enclosure url="https://p.example/1.mp3" type="audio/mpeg"/>
+                <podcast:transcript url="https://p.example/es.json" type="application/json" language="es"/>
+                <podcast:transcript url="https://p.example/1.srt" type="application/srt"/>
+                <podcast:transcript url="https://p.example/1.vtt" type="text/vtt" language="en"/>
+              </item>
+            </channel></rss>"#;
+        let media = rss(feed.as_bytes(), "https://p.example/feed").unwrap();
+        let transcripts = &media.items[0].as_ref().unwrap().transcripts;
+        let listed: Vec<_> = transcripts
+            .iter()
+            .map(|t| (t.mime.as_str(), t.lang.as_deref()))
+            .collect();
+        assert_eq!(
+            listed,
+            [
+                ("application/srt", Some("en-GB")),
+                ("text/vtt", Some("en")),
+                ("application/json", Some("es"))
+            ]
+        );
+        assert_eq!(best_transcript(transcripts).unwrap().mime, "text/vtt");
         for (mime, rank) in [
             ("application/json", 0),
             ("text/srt", 2),
