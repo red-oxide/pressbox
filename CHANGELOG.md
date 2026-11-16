@@ -180,6 +180,10 @@ own releases.
   instead of the shared temporary directory (still the fallback when it is
   unset).
 
+### Project
+
+- `SECURITY.md`: how to report a vulnerability privately, and what's in scope.
+
 ## [0.1.0] - 2026-11-07
 
 The first release.

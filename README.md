@@ -50,6 +50,7 @@ NixOS config ──▶ pressbox.toml ──▶ pressboxd ──▶ SQLite (items
 - [Clients (Home Manager)](./docs/clients.md): the terminal and desktop clients
   and the Birdland bar
 - [API](./docs/api.md): the HTTP API clients use
+- [Security](./SECURITY.md): reporting a vulnerability privately
 
 ## Apple and Android apps
 

@@ -89,8 +89,6 @@ new here; tvOS uses the artwork cache above.
 - [ ] Keep Cargo dependencies current: a scheduled job that runs `cargo update`
   and opens a pull request, as `update-flake-lock.yml` does for flake
   inputs. `cargo deny` only reports advisories; it doesn't update.
-- [ ] `SECURITY.md`: how to report a vulnerability privately. pressboxd faces
-  the network and holds device tokens.
 - [ ] A guide for running pressboxd outside NixOS (`docs/manual.md`): building
   with Cargo or `nix build`, writing `pressbox.toml` by hand (every key the
   module sets), a systemd unit and backup timer equivalent to the module's,
