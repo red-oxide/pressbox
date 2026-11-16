@@ -289,25 +289,41 @@ impl Server {
     }
 }
 
-/// Fetches feeds as they come due, sleeping until the next one (at most five
-/// minutes, so newly due feeds are noticed) or until a refresh is requested.
+/// The shortest wait before feeds are fetched again when the database took
+/// neither their entries nor when to try next. They are still due, and
+/// without it their servers would be asked again every second.
+const UNRECORDED_PAUSE: u64 = 60;
+
+/// How long the scheduler sleeps: until the next feed is due, but at least a
+/// second ([`UNRECORDED_PAUSE`] after a pass whose outcome went unrecorded)
+/// and at most five minutes, so newly due feeds are noticed.
+fn pause(next: Option<i64>, now: i64, unrecorded: bool) -> Duration {
+    let shortest = if unrecorded { UNRECORDED_PAUSE } else { 1 };
+    let until = next.unwrap_or(now + 300) - now;
+    Duration::from_secs(u64::try_from(until).unwrap_or(0).clamp(shortest, 300))
+}
+
+/// Fetches feeds as they come due, sleeping until the next one or until a
+/// refresh is requested; see [`pause`].
 async fn schedule(state: Arc<AppState>, default_interval: u64) {
     let mut last = None;
     loop {
+        let mut unrecorded = false;
         if let Some(stats) = fetch::run_due(state.clone(), default_interval).await {
+            unrecorded = stats.unrecorded > 0;
             last = Some((stats, chrono::Local::now()));
         }
         if let Ok(counts) = state.read(|db| db.counts()).await {
             systemd::status(&status_line(&counts, last));
         }
         let now = fetch::now();
-        let next = state
-            .read(|db| db.next_due())
-            .await
-            .ok()
-            .flatten()
-            .unwrap_or(now + 300);
-        let wait = Duration::from_secs(u64::try_from(next - now).unwrap_or(0).clamp(1, 300));
+        let next = state.read(|db| db.next_due()).await.ok().flatten();
+        let wait = pause(next, now, unrecorded);
+        if unrecorded {
+            // A requested refresh waits too; it is still pending afterwards.
+            tokio::time::sleep(wait).await;
+            continue;
+        }
         tokio::select! {
             () = tokio::time::sleep(wait) => {}
             () = state.refresh.notified() => info!("refresh requested"),
@@ -549,6 +565,18 @@ mod tests {
     }
 
     #[test]
+    fn pauses_until_the_next_feed_is_due() {
+        let secs = |next, unrecorded| pause(next, 1000, unrecorded).as_secs();
+        assert_eq!(secs(Some(1090), false), 90);
+        assert_eq!(secs(Some(5000), false), 300, "at most five minutes");
+        assert_eq!(secs(None, false), 300, "no feeds at all");
+        assert_eq!(secs(Some(900), false), 1, "overdue: at once");
+        // Still due because nothing could be written: not at once.
+        assert_eq!(secs(Some(0), true), UNRECORDED_PAUSE);
+        assert_eq!(secs(Some(1200), true), 200);
+    }
+
+    #[test]
     fn status_line_sums_up() {
         let counts = db::Counts {
             feeds: 12,
@@ -560,6 +588,7 @@ mod tests {
             fetched: 12,
             failed: 1,
             new_items: 5,
+            unrecorded: 0,
         };
         let at = chrono::Local
             .with_ymd_and_hms(2026, 11, 9, 14, 5, 0)

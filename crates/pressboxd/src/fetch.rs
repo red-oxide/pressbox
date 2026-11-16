@@ -281,6 +281,18 @@ pub struct RefreshStats {
     pub fetched: usize,
     pub failed: usize,
     pub new_items: usize,
+    /// Failed feeds whose outcome could not be written down either, so they
+    /// are still due.
+    pub unrecorded: usize,
+}
+
+/// How fetching one feed went.
+enum Refreshed {
+    /// Fetched and stored, with this many new items.
+    New(usize),
+    Failed,
+    /// Failed, and the database wouldn't take when to try again.
+    Unrecorded,
 }
 
 /// Fetches every feed that is due, a few at a time. `None` if none was due.
@@ -297,15 +309,23 @@ pub async fn run_due(state: Arc<AppState>, default_interval: u64) -> Option<Refr
         }
     };
     let fetched = targets.len();
-    let results: Vec<Option<usize>> = futures::stream::iter(targets)
+    let results: Vec<Refreshed> = futures::stream::iter(targets)
         .map(|target| refresh_one(state.clone(), target))
         .buffer_unordered(CONCURRENCY)
         .collect()
         .await;
+    let count = |wanted: fn(&Refreshed) -> bool| results.iter().filter(|r| wanted(r)).count();
     let stats = RefreshStats {
         fetched,
-        failed: results.iter().filter(|r| r.is_none()).count(),
-        new_items: results.into_iter().flatten().sum(),
+        failed: count(|r| !matches!(r, Refreshed::New(_))),
+        unrecorded: count(|r| matches!(r, Refreshed::Unrecorded)),
+        new_items: results
+            .iter()
+            .map(|r| match r {
+                Refreshed::New(new) => *new,
+                Refreshed::Failed | Refreshed::Unrecorded => 0,
+            })
+            .sum(),
     };
     info!(
         "fetched {} feeds: {} new items, {} failed",
@@ -314,8 +334,7 @@ pub async fn run_due(state: Arc<AppState>, default_interval: u64) -> Option<Refr
     Some(stats)
 }
 
-/// Returns the number of new items, or `None` if the feed failed.
-async fn refresh_one(state: Arc<AppState>, target: FetchTarget) -> Option<usize> {
+async fn refresh_one(state: Arc<AppState>, target: FetchTarget) -> Refreshed {
     let now = now();
     let (mut result, items, outcome) = match poll(&state.http, &target, now).await {
         Ok(Polled::Fresh {
@@ -366,11 +385,47 @@ async fn refresh_one(state: Arc<AppState>, target: FetchTarget) -> Option<usize>
         spawn_articles(&state, target.url.clone());
     }
     match stored {
-        Ok(new) if !failed => Some(new),
-        Ok(_) => None,
+        Ok(new) if !failed => Refreshed::New(new),
+        Ok(_) => Refreshed::Failed,
         Err(e) => {
             warn!(feed = target.url, "storing: {e:#}");
-            None
+            record_unstored(&state, &target, now, &e).await
+        }
+    }
+}
+
+/// Records a fetch whose entries couldn't be stored as a failure, so the
+/// feed backs off like any failing feed. `store` writes when to fetch next
+/// last of all; without that the feed stays due, and the scheduler would
+/// ask its server again every second for as long as storing fails. The
+/// ETag stays as it was, so the next fetch gets the entries again.
+async fn record_unstored(
+    state: &Arc<AppState>,
+    target: &FetchTarget,
+    now: i64,
+    error: &anyhow::Error,
+) -> Refreshed {
+    let (next_fetch, fail_count) = schedule(
+        now,
+        target.interval,
+        target.fail_count,
+        Outcome::Failed { retry_after: None },
+    );
+    let result = FetchResult {
+        error: Some(format!("storing: {error:#}")),
+        next_fetch,
+        fail_count,
+        ..Default::default()
+    };
+    let url = target.url.clone();
+    match state
+        .write(move |db| db.record_fetch(&url, now, &result))
+        .await
+    {
+        Ok(()) => Refreshed::Failed,
+        Err(e) => {
+            warn!(feed = target.url, "recording the failure: {e:#}");
+            Refreshed::Unrecorded
         }
     }
 }
@@ -1427,7 +1482,8 @@ mod tests {
             RefreshStats {
                 fetched: 3,
                 failed: 2,
-                new_items: 3
+                new_items: 3,
+                unrecorded: 0,
             }
         );
         assert_eq!(run_due(state.clone(), 1800).await, None, "nothing due");
@@ -1535,6 +1591,23 @@ mod tests {
         );
         let stats = run_due(state.clone(), 1800).await.unwrap();
         assert_eq!((stats.fetched, stats.failed, stats.new_items), (1, 1, 0));
+        // It backs off like any failing feed, rather than staying due.
+        assert_eq!(stats.unrecorded, 0);
+        assert_eq!(run_due(state.clone(), 1800).await, None, "not due again");
+        let listed = state.reader().feeds(1).unwrap();
+        let error = listed[0].last_error.as_deref().unwrap();
+        assert!(error.starts_with("storing: "), "{error}");
+        state.db().break_with("UPDATE sources SET next_fetch = 0");
+        let again = state.reader().due_targets(now(), 1800).unwrap();
+        assert_eq!((again[0].fail_count, again[0].etag.as_deref()), (1, None));
+
+        // Can't even record that: the scheduler is told, and holds off.
+        state.db().break_with(
+            "CREATE TRIGGER stuck BEFORE UPDATE ON sources
+             BEGIN SELECT RAISE(ABORT, 'disk full'); END;",
+        );
+        let stats = run_due(state.clone(), 1800).await.unwrap();
+        assert_eq!((stats.failed, stats.unrecorded), (1, 1));
 
         // Can't store an article: logged, and left to try again.
         let state = local_state(addr);

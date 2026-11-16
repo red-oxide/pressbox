@@ -112,6 +112,11 @@ own releases.
   own network. Feeds themselves are still fetched from wherever their `url`
   says.
 
+- A feed whose entries cannot be stored (a full disk, say) backs off like any
+  failing feed, with the reason as its error. It used to stay due, so its server
+  was asked again every second for as long as storing failed. If not even that
+  can be recorded, the scheduler waits a minute before trying again.
+
 ### Desktop client
 
 - Up Next: the server's queue in the sidebar, Add to Up Next and Play next on
