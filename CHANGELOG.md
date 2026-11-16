@@ -96,6 +96,10 @@ own releases.
   out, as media URLs already were. A feed could put `javascript:` or `file:`
   links there, which clients pass to the browser or `xdg-open`.
 
+- A feed that lists more entries than `maxItemsPerFeed` (a long-running podcast,
+  say) no longer has the older ones stored, counted as new and pruned again on
+  every fetch. They also showed as unread for a moment each time.
+
 ### Desktop client
 
 - Up Next: the server's queue in the sidebar, Add to Up Next and Play next on

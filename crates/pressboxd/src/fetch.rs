@@ -207,6 +207,23 @@ async fn refresh_one(state: Arc<AppState>, target: FetchTarget) -> Option<usize>
     }
 }
 
+/// The publication time of the oldest of the newest `max` entries, when a
+/// feed lists more than `max`: anything older would be pruned as soon as it
+/// was stored. Undated entries count as new, as they are stored. `None` if
+/// everything fits.
+fn oldest_kept(items: &[RawItem], max: u32) -> Option<i64> {
+    let max = usize::try_from(max).unwrap_or(usize::MAX);
+    if items.len() <= max {
+        return None;
+    }
+    let mut published: Vec<i64> = items
+        .iter()
+        .map(|i| i.published.unwrap_or(i64::MAX))
+        .collect();
+    let (_, oldest, _) = published.select_nth_unstable_by(max - 1, |a, b| b.cmp(a));
+    Some(*oldest)
+}
+
 /// Stores a poll's entries and outcome. Blocking: sanitizes and writes.
 /// Entries stored before, unchanged, are skipped without sanitizing them.
 fn store(
@@ -228,8 +245,19 @@ fn store(
     } else {
         state.reader().source_digests(url)?
     };
+    // A feed can list more entries than are kept (a podcast's whole run,
+    // say). The ones past the limit were pruned after an earlier fetch, so
+    // they are not known, and storing them again would only have them
+    // counted as new, shown as unread and pruned once more, every fetch.
+    // Entries that are stored (starred or queued ones outlive the limit)
+    // still get their updates.
+    let oldest = oldest_kept(&items, state.max_items_per_feed);
     let fresh: Vec<_> = items
         .into_iter()
+        .filter(|raw| {
+            oldest.is_none_or(|o| raw.published.is_none_or(|p| p >= o))
+                || known.contains_key(&raw.guid)
+        })
         .filter_map(|raw| {
             let digest = raw.digest();
             (known.get(&raw.guid) != Some(&digest)).then(|| (raw.sanitize(), digest))
@@ -893,6 +921,72 @@ mod tests {
         assert_eq!(store(&state, FEED, 0, None, items, &result).unwrap(), 0);
         assert_eq!(titles(), ["First", "Second edit"]);
         assert_eq!(state.reader().source_digests(FEED).unwrap(), changed);
+    }
+
+    #[test]
+    fn entries_past_the_limit_are_not_stored_again() {
+        const FEED: &str = "https://example.com/feed.xml";
+        // Six dated entries (and maybe a seventh), oldest first.
+        let rss = |count: u32, second: &str| {
+            let items: String = (1..=count)
+                .map(|n| {
+                    let title = if n == 2 { second } else { "Item" };
+                    format!(
+                        "<item><title>{title} {n}</title><guid>urn:{n}</guid>
+                         <pubDate>0{n} Nov 2026 10:00:00 GMT</pubDate></item>"
+                    )
+                })
+                .collect();
+            format!(r#"<rss version="2.0"><channel><title>T</title>{items}</channel></rss>"#)
+        };
+        let mut db = crate::db::Db::open_in_memory().unwrap();
+        db.sync(&crate::config::Config::parse(&format!("[feeds.a]\nurl = \"{FEED}\"")).unwrap())
+            .unwrap();
+        let user = db.only_user().unwrap().unwrap().id;
+        let mut state = AppState::new(db, None, 100).unwrap();
+        let titles = |state: &AppState| -> Vec<String> {
+            let page = state
+                .reader()
+                .items(user, &pressbox_api::ItemQuery::default())
+                .unwrap();
+            page.items.into_iter().map(|i| i.title).collect()
+        };
+        let fetch = |state: &AppState, body: String| {
+            let (result, items) = parse_raw(body.as_bytes(), Some(FEED)).unwrap();
+            store(state, FEED, 0, None, items, &result).unwrap()
+        };
+
+        // Everything fits: all six are stored, and the oldest is starred.
+        assert_eq!(fetch(&state, rss(6, "Item")), 6);
+        let oldest = state.reader().items(user, &Default::default()).unwrap();
+        let oldest = oldest.items.last().unwrap().id;
+        state.db().set_starred(user, oldest, true).unwrap();
+
+        // With room for three, the rest are pruned, except the starred one.
+        state.max_items_per_feed = 3;
+        assert_eq!(fetch(&state, rss(7, "Item")), 1);
+        assert_eq!(titles(&state), ["Item 7", "Item 6", "Item 5", "Item 1"]);
+
+        // The feed still lists all seven: nothing is new, nothing comes back.
+        assert_eq!(fetch(&state, rss(7, "Item")), 0);
+        assert_eq!(titles(&state), ["Item 7", "Item 6", "Item 5", "Item 1"]);
+        // An edit to a pruned entry doesn't bring it back either...
+        assert_eq!(fetch(&state, rss(7, "Edited")), 0);
+        assert_eq!(titles(&state).len(), 4);
+        // ...but one to a stored entry past the limit is still taken.
+        let edited = rss(7, "Item").replace("Item 1<", "Starred 1<");
+        assert_eq!(fetch(&state, edited), 0);
+        assert_eq!(titles(&state)[3], "Starred 1");
+
+        // Undated entries count as new, as they are stored.
+        let undated: Vec<RawItem> = parse_raw(
+            rss(7, "Item").replace("pubDate", "x").as_bytes(),
+            Some(FEED),
+        )
+        .unwrap()
+        .1;
+        assert_eq!(oldest_kept(&undated, 3), Some(i64::MAX));
+        assert_eq!(oldest_kept(&undated, 7), None);
     }
 
     #[tokio::test]
