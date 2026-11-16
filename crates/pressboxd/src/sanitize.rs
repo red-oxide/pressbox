@@ -96,6 +96,56 @@ const ENTITIES: [(&str, char); 6] = [
 /// from `<` to `>` is enough and much cheaper than parsing it again. One
 /// pass, as this runs for every item stored.
 pub fn text(html: &str) -> String {
+    plain(html, |_| true)
+}
+
+/// How a title is written, which decides what a `<` in it means.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Markup {
+    /// Plain text (Atom `type="text"`, JSON Feed): kept as it is.
+    Text,
+    /// HTML (Atom `type="html"` and `"xhtml"`): every tag goes.
+    Html,
+    /// The feed doesn't say (RSS, chapter files): some titles carry
+    /// escaped HTML and some are plain text that happens to contain `<`.
+    Unknown,
+}
+
+/// Lowercase HTML elements that turn up in titles. Only these are taken to
+/// be tags in a title whose markup is [`Markup::Unknown`], so `Vec<T>` and
+/// `a < b and c > d` stay whole. Uppercase names are left alone: HTML in
+/// feeds is lowercase, and type parameters (`<A>`, `<B>`, `<S>`) are not.
+const TITLE_TAGS: &[&str] = &[
+    "a", "abbr", "b", "bdi", "bdo", "big", "br", "cite", "code", "del", "dfn", "div", "em", "font",
+    "h1", "h2", "h3", "h4", "h5", "h6", "i", "img", "ins", "kbd", "mark", "p", "q", "s", "samp",
+    "small", "span", "strike", "strong", "sub", "sup", "time", "tt", "u", "var", "wbr",
+];
+
+/// Whether what stands between a `<` and the next `>` is one of
+/// [`TITLE_TAGS`], opening or closing, with or without attributes.
+fn is_title_tag(inner: &str) -> bool {
+    let inner = inner.strip_prefix('/').unwrap_or(inner);
+    let name = inner
+        .split(|c: char| c.is_whitespace() || c == '/')
+        .next()
+        .unwrap_or_default();
+    TITLE_TAGS.contains(&name)
+}
+
+/// A title as plain text on one line. Titles are shown as text by every
+/// client, so markup is removed rather than cleaned; `markup` says how
+/// much of what looks like a tag really is one.
+pub fn title(raw: &str, markup: Markup) -> String {
+    match markup {
+        Markup::Text => raw.split_whitespace().collect::<Vec<_>>().join(" "),
+        Markup::Html => text(raw),
+        Markup::Unknown => plain(raw, is_title_tag),
+    }
+}
+
+/// [`text`], removing only the tags `is_tag` accepts (it is given what
+/// stands between `<` and `>`); any other `<` is kept as text.
+fn plain(html: &str, is_tag: impl Fn(&str) -> bool) -> String {
     let mut out = String::with_capacity(html.len());
     // Whitespace (or a tag) seen since the last character written.
     let mut gap = false;
@@ -103,8 +153,8 @@ pub fn text(html: &str) -> String {
     while let Some(c) = rest.chars().next() {
         let (c, len) = match c {
             '<' => match rest.find('>') {
-                Some(end) => (' ', end + 1),
-                None => ('<', 1),
+                Some(end) if is_tag(&rest[1..end]) => (' ', end + 1),
+                _ => ('<', 1),
             },
             '&' => ENTITIES
                 .iter()
@@ -236,6 +286,51 @@ mod tests {
             "<p>multi\nline\ntag</p",
         ] {
             assert_eq!(text(case), text_reference(case), "{case:?}");
+        }
+    }
+
+    #[test]
+    fn titles_keep_text_that_only_looks_like_a_tag() {
+        for (raw, markup, expected) in [
+            // RSS doesn't say whether a title is HTML: known tags go...
+            ("A <b>bold</b> title", Markup::Unknown, "A bold title"),
+            (
+                r#"<a href="/x">Link</a> and <br/> break"#,
+                Markup::Unknown,
+                "Link and break",
+            ),
+            ("T &amp; <em>x</em>", Markup::Unknown, "T & x"),
+            // ...and everything else stays.
+            (
+                "Why Vec<T> beats LinkedList<T>",
+                Markup::Unknown,
+                "Why Vec<T> beats LinkedList<T>",
+            ),
+            (
+                "When a < b and c > d",
+                Markup::Unknown,
+                "When a < b and c > d",
+            ),
+            (
+                "Result<A, B> and <S>",
+                Markup::Unknown,
+                "Result<A, B> and <S>",
+            ),
+            (
+                "Vec<u8> vs <unknown>",
+                Markup::Unknown,
+                "Vec<u8> vs <unknown>",
+            ),
+            ("I <3 feeds", Markup::Unknown, "I <3 feeds"),
+            // Atom says: text is kept to the letter, HTML loses every tag.
+            (" Vec<b>  &amp;\n more ", Markup::Text, "Vec<b> &amp; more"),
+            (
+                "<span>Vec&lt;T&gt;</span> &amp; <x-y>more</x-y>",
+                Markup::Html,
+                "Vec<T> & more",
+            ),
+        ] {
+            assert_eq!(title(raw, markup), expected, "{raw:?} as {markup:?}");
         }
     }
 

@@ -102,7 +102,7 @@ fn rss_item(item: Node<'_, '_>, base: Option<&Url>) -> Option<Media> {
             height: number(alt.attribute("height")),
             title: alt
                 .attribute("title")
-                .map(sanitize::text)
+                .map(plain_title)
                 .filter(|t| !t.is_empty()),
         };
         if !enclosures.iter().any(|e| e.url == alt.url) {
@@ -164,7 +164,7 @@ pub fn from_links(links: &[feed_rs::model::Link], base: &str) -> Option<Media> {
                 title: l
                     .title
                     .as_deref()
-                    .map(sanitize::text)
+                    .map(plain_title)
                     .filter(|t| !t.is_empty()),
                 ..Enclosure::default()
             })
@@ -174,6 +174,12 @@ pub fn from_links(links: &[feed_rs::model::Link], base: &str) -> Option<Media> {
         enclosures,
         ..Media::default()
     })
+}
+
+/// The title of an enclosure or a chapter, which, like an RSS title, may or
+/// may not carry HTML.
+fn plain_title(raw: &str) -> String {
+    sanitize::title(raw, sanitize::Markup::Unknown)
 }
 
 /// `itunes:duration`: seconds, `MM:SS` or `HH:MM:SS`, maybe with a
@@ -273,10 +279,7 @@ pub fn chapters(body: &[u8], file_url: &str) -> Option<Chapters> {
         .map(|c| Chapter {
             start: c.start_time,
             end: c.end_time.filter(|e| e.is_finite() && *e >= c.start_time),
-            title: c
-                .title
-                .map(|t| sanitize::text(&t))
-                .filter(|t| !t.is_empty()),
+            title: c.title.map(|t| plain_title(&t)).filter(|t| !t.is_empty()),
             image: c.img.and_then(|u| media_url(&u, base.as_ref())),
             url: c.url.and_then(|u| media_url(&u, base.as_ref())),
             hidden: c.toc == Some(false),

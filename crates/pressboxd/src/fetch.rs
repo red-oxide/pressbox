@@ -459,6 +459,8 @@ async fn poll(http: &reqwest::Client, target: &FetchTarget, now: i64) -> Result<
 pub struct RawItem {
     pub guid: String,
     title: Option<String>,
+    /// Whether the feed wrote the title as text or HTML.
+    title_markup: sanitize::Markup,
     url: Option<String>,
     author: Option<String>,
     summary: Option<String>,
@@ -500,7 +502,7 @@ impl RawItem {
         NewItem {
             title: self
                 .title
-                .map(|t| sanitize::text(&t))
+                .map(|t| sanitize::title(&t, self.title_markup))
                 .filter(|t| !t.is_empty())
                 .or_else(|| self.url.clone())
                 .unwrap_or_else(|| "(untitled)".to_owned()),
@@ -529,6 +531,8 @@ pub fn parse_raw(body: &[u8], uri: Option<&str>) -> Result<(FetchResult, Vec<Raw
         .build()
         .parse(body)?;
     let feed_url = uri.unwrap_or_default();
+    let feed_type = &feed.feed_type;
+    let plain = sanitize::Markup::Text;
     // RSS media tags, by item (feed-rs keeps the feed's order). If the
     // counts differ the two parsers disagree about the items; skip theirs,
     // but keep the channel's artwork and medium.
@@ -554,6 +558,7 @@ pub fn parse_raw(body: &[u8], uri: Option<&str>) -> Result<(FetchResult, Vec<Raw
                 media,
                 base: sanitize::base_url(url.as_deref(), feed_url),
                 guid: e.id,
+                title_markup: e.title.as_ref().map_or(plain, |t| markup(feed_type, t)),
                 title: e.title.map(|t| t.content),
                 author: e.authors.into_iter().find_map(|p| p.name),
                 summary: e.summary.map(|s| s.content),
@@ -568,13 +573,29 @@ pub fn parse_raw(body: &[u8], uri: Option<&str>) -> Result<(FetchResult, Vec<Raw
         media::http_url(&logo.uri, feed_url)
     });
     let result = FetchResult {
-        title: feed.title.map(|t| sanitize::text(&t.content)),
+        title: feed
+            .title
+            .map(|t| sanitize::title(&t.content, markup(feed_type, &t))),
         site_url: alternate(&feed.links).map(|l| l.href.clone()),
         image,
         medium,
         ..Default::default()
     };
     Ok((result, items))
+}
+
+/// How a title is written. Atom says (`type`), JSON Feed titles are plain
+/// text, and RSS leaves it open.
+fn markup(feed_type: &feed_rs::model::FeedType, title: &feed_rs::model::Text) -> sanitize::Markup {
+    use feed_rs::model::FeedType;
+    match feed_type {
+        FeedType::Atom => match title.content_type.subty().as_str() {
+            "html" | "xhtml" => sanitize::Markup::Html,
+            _ => sanitize::Markup::Text,
+        },
+        FeedType::JSON => sanitize::Markup::Text,
+        FeedType::RSS0 | FeedType::RSS1 | FeedType::RSS2 => sanitize::Markup::Unknown,
+    }
 }
 
 /// The link to the page itself: `rel="alternate"`, or no `rel` at all.
@@ -660,6 +681,36 @@ mod tests {
             summary.contains(r#"href="https://example.com/2""#),
             "{summary}"
         );
+    }
+
+    #[test]
+    fn titles_follow_what_the_feed_says_they_are() {
+        let rss = br#"<rss version="2.0"><channel><title>Vec&lt;T&gt; weekly</title>
+              <item><title>Why Vec&lt;T&gt; beats &lt;i&gt;lists&lt;/i&gt;</title><guid>1</guid></item>
+              <item><title>When a &lt; b and c &gt; d</title><guid>2</guid></item>
+            </channel></rss>"#;
+        let (meta, items) = parse(rss, None).unwrap();
+        assert_eq!(meta.title.as_deref(), Some("Vec<T> weekly"));
+        assert_eq!(items[0].title, "Why Vec<T> beats lists");
+        assert_eq!(items[1].title, "When a < b and c > d");
+
+        let atom = br#"<feed xmlns="http://www.w3.org/2005/Atom">
+              <title type="html">&lt;b&gt;Bold&lt;/b&gt; news</title><id>urn:f</id>
+              <entry><title>Plain &lt;b&gt; tag</title><id>urn:1</id></entry>
+              <entry><title type="html">An &lt;x-tag&gt;odd&lt;/x-tag&gt; one</title><id>urn:2</id></entry>
+              <entry><title type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml">X <em>html</em></div></title><id>urn:3</id></entry>
+            </feed>"#;
+        let (meta, items) = parse(atom, None).unwrap();
+        assert_eq!(meta.title.as_deref(), Some("Bold news"));
+        assert_eq!(items[0].title, "Plain <b> tag", "text is kept as written");
+        assert_eq!(items[1].title, "An odd one", "HTML loses every tag");
+        assert_eq!(items[2].title, "X html");
+
+        let json = br#"{"version": "https://jsonfeed.org/version/1.1", "title": "J <b>",
+            "items": [{"id": "1", "title": "Option<i> &amp; more"}]}"#;
+        let (meta, items) = parse(json, None).unwrap();
+        assert_eq!(meta.title.as_deref(), Some("J <b>"));
+        assert_eq!(items[0].title, "Option<i> &amp; more");
     }
 
     #[test]

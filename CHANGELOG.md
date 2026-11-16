@@ -85,6 +85,13 @@ own releases.
   and unread, are podcast episodes (have media). Clients use them to show
   podcasts, news or both.
 
+- Titles keep text that only looks like a tag. Every `<...>` was removed, so
+  "Why Vec<T> beats LinkedList<T>" was stored as "Why Vec beats LinkedList" and
+  "a < b and c > d" as "a d". Atom titles now follow their `type`, JSON Feed
+  titles are kept as written, and RSS titles (and chapter and enclosure titles)
+  lose only lowercase HTML tags such as `<b>` or `<em>`. Items stored by 0.1.0
+  are corrected on the first fetch after upgrading.
+
 ### Desktop client
 
 - Up Next: the server's queue in the sidebar, Add to Up Next and Play next on
