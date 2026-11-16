@@ -16,10 +16,6 @@ holds what they need from the server.
 
 - [ ] Release 26.0.0: date the changelog entry, tag `v26.0.0`, and publish a
   GitHub release with that entry as its notes.
-- [ ] Decide the server's license: keep AGPL-3.0-only or move `pressboxd`,
-  `pressboxctl` and the NixOS module to GPL-3.0-only. Do it before 26.0.0 if
-  it's changing, and update the SPDX headers, `REUSE.toml`, `LICENSES/` and
-  the README together.
 - [ ] A release workflow: on a `v*` tag, check that the tag matches `version` in
   `Cargo.toml`, run `just verify`, and create the release from the
   changelog.
