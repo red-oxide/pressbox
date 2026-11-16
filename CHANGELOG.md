@@ -117,6 +117,11 @@ own releases.
   was asked again every second for as long as storing failed. If not even that
   can be recorded, the scheduler waits a minute before trying again.
 
+- `POST /api/v1/refresh` and `pressboxctl refresh` leave alone feeds fetched
+  within the last minute, and failing feeds fetched within the last ten, so a
+  client that refreshes often (or a failing feed that asked for a pause with
+  `Retry-After`) does not have every feed fetched again each time.
+
 ### Desktop client
 
 - Up Next: the server's queue in the sidebar, Add to Up Next and Play next on

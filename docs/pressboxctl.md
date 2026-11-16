@@ -18,7 +18,7 @@ Runs as root on the server and talks to pressboxd over
 | `revoke NAME` | Revoke a device's token |
 | `add-device NAME [--user U]` | Create a device and print its token |
 | `backup [--keep N]` | Back up now (the timer runs this daily) |
-| `refresh` | Fetch every feed now |
+| `refresh` | Fetch every feed now (except ones fetched a moment ago) |
 | `opml-export [--user U]` | Print a user's feeds as OPML |
 | `opml-to-nix FILE` | Convert OPML to a `feeds` attrset (offline) |
 | `discover URL` | Find a site's feeds and print them as Nix (no root needed) |

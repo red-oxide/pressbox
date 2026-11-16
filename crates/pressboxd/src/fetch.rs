@@ -1554,7 +1554,10 @@ mod tests {
         );
 
         // Second pass: 304 keeps the ETag and honours max-age; the 503
-        // backs off again.
+        // backs off again. (A refresh only takes feeds not just fetched.)
+        state
+            .db()
+            .break_with("UPDATE sources SET last_fetched = last_fetched - 3600");
         state.request_refresh().await;
         let second = now();
         let stats = run_due(state.clone(), 1800).await.unwrap();

@@ -227,6 +227,12 @@ const MIGRATIONS: &[&str] = &[
     ",
 ];
 
+/// A requested refresh leaves alone feeds fetched within this many seconds
+/// (the shortest `refresh_interval` there is).
+pub const REFRESH_GAP: i64 = 60;
+/// The same for feeds whose last fetch failed, which are backing off.
+pub const FAILING_REFRESH_GAP: i64 = 600;
+
 /// The most episodes a user's queue holds.
 pub const MAX_QUEUE: usize = 500;
 
@@ -626,12 +632,18 @@ impl Db {
         )?)
     }
 
-    /// Makes every followed feed due now (for `POST /api/v1/refresh`).
-    pub fn force_refresh(&self) -> Result<()> {
+    /// Makes followed feeds due now (for `POST /api/v1/refresh`), except the
+    /// ones fetched within the last [`REFRESH_GAP`] seconds, or, if their
+    /// last fetch failed, [`FAILING_REFRESH_GAP`]. Any paired device can ask
+    /// for a refresh as often as it likes, and feeds' servers shouldn't pay
+    /// for that; a failing one may have asked to be left alone for a while.
+    pub fn force_refresh(&self, now: i64) -> Result<()> {
         self.conn.execute(
             "UPDATE sources SET next_fetch = 0
-             WHERE url IN (SELECT source FROM subscriptions WHERE archived = 0)",
-            [],
+             WHERE url IN (SELECT source FROM subscriptions WHERE archived = 0)
+               AND COALESCE(last_fetched, 0)
+                   <= ?1 - CASE WHEN fail_count > 0 THEN ?3 ELSE ?2 END",
+            params![now, REFRESH_GAP, FAILING_REFRESH_GAP],
         )?;
         Ok(())
     }
@@ -2416,8 +2428,21 @@ mod tests {
                 .fail_count,
             3
         );
-        db.force_refresh().unwrap();
-        assert_eq!(db.due_targets(0, 1800).unwrap().len(), 3);
+        // A refresh so soon after those fetches changes nothing.
+        let due = |db: &Db| -> Vec<String> {
+            let targets = db.due_targets(0, 1800).unwrap();
+            targets.into_iter().map(|t| t.url).collect()
+        };
+        db.force_refresh(10 + REFRESH_GAP - 1).unwrap();
+        assert!(due(&db).is_empty());
+        // A minute on, the healthy feeds are fetched; the failing one is
+        // left to back off for ten.
+        db.force_refresh(10 + REFRESH_GAP).unwrap();
+        assert_eq!(due(&db), [B, C]);
+        db.force_refresh(10 + FAILING_REFRESH_GAP - 1).unwrap();
+        assert_eq!(due(&db), [B, C]);
+        db.force_refresh(10 + FAILING_REFRESH_GAP).unwrap();
+        assert_eq!(due(&db), [A, B, C]);
     }
 
     #[test]

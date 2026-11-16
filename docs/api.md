@@ -41,6 +41,10 @@ A cursor is opaque, and a malformed one is a 400. The older `offset` parameter
 (answered with `next_offset`) still works, but gets slower the further into a
 list it goes.
 
+`POST /api/v1/refresh` fetches every feed now, except those fetched within the
+last minute (ten minutes for a feed whose last fetch failed), so asking often
+doesn't hammer the feeds' servers.
+
 `unread=false` lists only read items. `POST /api/v1/items/read-all` marks read
 every item a list shows, however many pages it has: its body takes the same
 filters as `GET /api/v1/items` (`feed`, `tag`, `unread`, `starred`, `q`), and

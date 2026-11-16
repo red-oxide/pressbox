@@ -89,9 +89,10 @@ impl AppState {
         })
     }
 
-    /// Makes every feed due and wakes the scheduler.
+    /// Makes feeds due (all but the ones fetched a moment ago; see
+    /// `Db::force_refresh`) and wakes the scheduler.
     pub async fn request_refresh(self: &Arc<Self>) {
-        if let Err(e) = self.write(|db| db.force_refresh()).await {
+        if let Err(e) = self.write(|db| db.force_refresh(fetch::now())).await {
             tracing::warn!("forcing a refresh: {e:#}");
         }
         self.refresh.notify_one();
@@ -678,6 +679,14 @@ mod tests {
             "not due again for 30 minutes"
         );
 
+        // (As if the first fetch were a while ago: one just made isn't
+        // repeated.)
+        state.request_refresh().await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert_eq!(fetches.load(Ordering::SeqCst), 1, "fetched a moment ago");
+        state
+            .db()
+            .break_with("UPDATE sources SET last_fetched = last_fetched - 3600");
         state.request_refresh().await;
         wait_for(2).await;
         assert_eq!(fetches.load(Ordering::SeqCst), 2);
