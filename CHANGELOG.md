@@ -92,6 +92,10 @@ own releases.
   lose only lowercase HTML tags such as `<b>` or `<em>`. Items stored by 0.1.0
   are corrected on the first fetch after upgrading.
 
+- An item's `url` and a feed's `site_url` are absolute `http(s)` URLs or left
+  out, as media URLs already were. A feed could put `javascript:` or `file:`
+  links there, which clients pass to the browser or `xdg-open`.
+
 ### Desktop client
 
 - Up Next: the server's queue in the sidebar, Add to Up Next and Play next on

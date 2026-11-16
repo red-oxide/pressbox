@@ -547,9 +547,11 @@ pub fn parse_raw(body: &[u8], uri: Option<&str>) -> Result<(FetchResult, Vec<Raw
         .entries
         .into_iter()
         .map(|e| {
+            // Clients hand this to a browser (`xdg-open`, `open`), so, like
+            // media URLs, only `http(s)` gets through.
             let url = alternate(&e.links)
                 .or_else(|| e.links.first())
-                .map(|l| l.href.clone());
+                .and_then(|l| media::http_url(&l.href, feed_url));
             let media = match rss_items.next() {
                 Some(m) => m,
                 None => media::from_links(&e.links, feed_url),
@@ -576,7 +578,7 @@ pub fn parse_raw(body: &[u8], uri: Option<&str>) -> Result<(FetchResult, Vec<Raw
         title: feed
             .title
             .map(|t| sanitize::title(&t.content, markup(feed_type, &t))),
-        site_url: alternate(&feed.links).map(|l| l.href.clone()),
+        site_url: alternate(&feed.links).and_then(|l| media::http_url(&l.href, feed_url)),
         image,
         medium,
         ..Default::default()
@@ -711,6 +713,32 @@ mod tests {
         let (meta, items) = parse(json, None).unwrap();
         assert_eq!(meta.title.as_deref(), Some("J <b>"));
         assert_eq!(items[0].title, "Option<i> &amp; more");
+    }
+
+    #[test]
+    fn links_are_http_or_dropped() {
+        let rss = br#"<rss version="2.0"><channel><title>T</title>
+              <link>javascript:alert(2)</link>
+              <item><title>a</title><link>javascript:alert(1)</link><guid>1</guid></item>
+              <item><title>b</title><link>file:///etc/passwd</link><guid>2</guid></item>
+              <item><title>c</title><link>/posts/3</link><guid>3</guid></item>
+              <item><title>d</title><link>HTTPS://Example.com/4</link><guid>4</guid></item>
+              <item><link>ftp://example.com/5</link><guid>5</guid></item>
+            </channel></rss>"#;
+        let (meta, items) = parse(rss, Some("https://example.com/feed.xml")).unwrap();
+        assert_eq!(meta.site_url, None);
+        let urls: Vec<_> = items.iter().map(|i| i.url.as_deref()).collect();
+        assert_eq!(
+            urls,
+            [
+                None,
+                None,
+                Some("https://example.com/posts/3"),
+                Some("https://example.com/4"),
+                None
+            ]
+        );
+        assert_eq!(items[4].title, "(untitled)", "a dropped link is no title");
     }
 
     #[test]
