@@ -100,6 +100,10 @@ own releases.
   say) no longer has the older ones stored, counted as new and pruned again on
   every fetch. They also showed as unread for a moment each time.
 
+- Giving a feed a new id in the configuration (same URL) renames it. It used to
+  add the new id and keep the old one as a removed feed while it had starred
+  items, which were then listed twice.
+
 ### Desktop client
 
 - Up Next: the server's queue in the sidebar, Add to Up Next and Play next on

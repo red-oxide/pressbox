@@ -566,6 +566,15 @@ impl Db {
                         params![uid, feed_id],
                     )?;
                 }
+                // A feed given a new id (or one moved to another feed's
+                // URL) is followed under the new id; kept as removed too,
+                // its starred items would be listed once for each.
+                tx.execute(
+                    "DELETE FROM subscriptions WHERE user_id = ?1 AND archived = 1
+                       AND source IN (SELECT source FROM subscriptions
+                                      WHERE user_id = ?1 AND archived = 0)",
+                    [uid],
+                )?;
             }
             collect_garbage(&tx)?;
         }
@@ -1901,6 +1910,47 @@ mod tests {
         assert_eq!(b.interval, 600, "chris asked for 600, anna 3600");
         assert_eq!(due.iter().find(|t| t.url == A).unwrap().interval, 1800);
         assert_eq!(db.counts().unwrap().feeds, 3);
+    }
+
+    #[test]
+    fn a_renamed_feed_keeps_its_items_once() {
+        const URL: &str = "https://a.example/feed";
+        let mut db = Db::open_in_memory().unwrap();
+        db.sync(&config(&format!("[feeds.old]\nurl = \"{URL}\"")))
+            .unwrap();
+        let user = db.only_user().unwrap().unwrap().id;
+        db.upsert_items(URL, 0, &[item("1", Some(1)), item("2", Some(2))])
+            .unwrap();
+        let all = ItemQuery::default();
+        let starred = db.items(user, &all).unwrap().items[0].id;
+        db.set_starred(user, starred, true).unwrap();
+        db.set_read(user, starred, true).unwrap();
+
+        // The same URL under a new id: one feed, each item once, state kept.
+        db.sync(&config(&format!("[feeds.new]\nurl = \"{URL}\"")))
+            .unwrap();
+        let feeds = db.feeds(user).unwrap();
+        assert_eq!(feeds.len(), 1, "{feeds:?}");
+        assert_eq!(
+            (feeds[0].id.as_str(), feeds[0].archived, feeds[0].unread),
+            ("new", false, 1)
+        );
+        let items = db.items(user, &all).unwrap().items;
+        assert_eq!(items.len(), 2, "{items:?}");
+        assert!(items.iter().all(|i| i.feed_id == "new"));
+        assert!(items[0].starred && items[0].read);
+
+        // An id moved onto another feed's URL takes that feed's place too.
+        db.sync(&config(&format!(
+            "[feeds.new]\nurl = \"{URL}\"\n[feeds.other]\nurl = \"https://b.example/\""
+        )))
+        .unwrap();
+        db.sync(&config(&format!("[feeds.other]\nurl = \"{URL}\"")))
+            .unwrap();
+        let feeds = db.feeds(user).unwrap();
+        assert_eq!(feeds.len(), 1, "{feeds:?}");
+        assert_eq!(feeds[0].id, "other");
+        assert_eq!(db.items(user, &all).unwrap().items.len(), 2);
     }
 
     #[test]
