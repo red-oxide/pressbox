@@ -253,7 +253,7 @@ fn run(args: Args, out: &mut impl Write) -> Result<()> {
 }
 
 fn ago(ts: i64) -> String {
-    let secs = chrono::Utc::now().timestamp() - ts;
+    let secs = jiff::Timestamp::now().as_second() - ts;
     match secs {
         ..60 => "just now".to_owned(),
         60..3600 => format!("{}m ago", secs / 60),
@@ -752,7 +752,7 @@ mod tests {
 
     #[test]
     fn reports_status_users_and_devices() {
-        let now = chrono::Utc::now().timestamp();
+        let now = jiff::Timestamp::now().as_second();
         let devices = format!(
             r#"[{{"name":"laptop","user":"chris","created":{},"last_seen":{}}},
                 {{"name":"phone","user":"anna","created":{},"last_seen":null}}]"#,
@@ -950,7 +950,7 @@ mod tests {
 
     #[test]
     fn says_how_long_ago() {
-        let now = chrono::Utc::now().timestamp();
+        let now = jiff::Timestamp::now().as_second();
         assert_eq!(ago(now - 5), "just now");
         assert_eq!(ago(now - 600), "10m ago");
         assert_eq!(ago(now - 3 * 3600), "3h ago");

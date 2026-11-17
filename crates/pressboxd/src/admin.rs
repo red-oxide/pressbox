@@ -166,7 +166,7 @@ async fn backup(
     // Milliseconds keep names unique; they still sort by time.
     let name = format!(
         "pressbox-{}.db",
-        chrono::Local::now().format("%Y%m%dT%H%M%S%.3f")
+        jiff::ZonedDateTime::now().strftime("%Y%m%dT%H%M%S%.3f")
     );
     let path = dir.join(name);
     let target = path.clone();
@@ -449,6 +449,26 @@ mod tests {
         let (status, body) = call(&s, "POST", "/admin/backup", Some(r#"{"keep":1}"#)).await;
         assert_eq!(status, StatusCode::OK, "{body}");
         let first: BackupResult = serde_json::from_str(&body).unwrap();
+        // Named for the local time to the millisecond, so names sort by time:
+        // pressbox-20261117T084200.123.db
+        let name = Path::new(&first.path)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap();
+        let stamp = name
+            .strip_prefix("pressbox-")
+            .and_then(|n| n.strip_suffix(".db"))
+            .unwrap();
+        assert_eq!(stamp.len(), "20261117T084200.123".len(), "{name}");
+        assert!(
+            stamp.chars().enumerate().all(|(i, c)| match i {
+                8 => c == 'T',
+                15 => c == '.',
+                _ => c.is_ascii_digit(),
+            }),
+            "{name}"
+        );
         assert!(first.removed.is_empty());
         let copy = Db::open(Path::new(&first.path)).unwrap();
         assert_eq!(copy.counts().unwrap().feeds, 1, "a working database");

@@ -3,7 +3,6 @@
 
 //! Drawing.
 
-use chrono::{Local, TimeZone};
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
@@ -115,10 +114,14 @@ fn draw_feeds(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 fn date(ts: i64) -> String {
-    Local
-        .timestamp_opt(ts, 0)
-        .single()
-        .map_or_else(String::new, |d| d.format("%b %d").to_string())
+    jiff::Timestamp::from_second(ts).map_or_else(
+        |_| String::new(),
+        |t| {
+            t.to_zoned_datetime(jiff::tz::TimeZone::system())
+                .strftime("%b %d")
+                .to_string()
+        },
+    )
 }
 
 /// `m:ss`, or `h:mm:ss` from an hour.

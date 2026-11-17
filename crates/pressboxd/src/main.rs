@@ -312,10 +312,10 @@ async fn schedule(state: Arc<AppState>, default_interval: u64) {
         let mut unrecorded = false;
         if let Some(stats) = fetch::run_due(state.clone(), default_interval).await {
             unrecorded = stats.unrecorded > 0;
-            last = Some((stats, chrono::Local::now()));
+            last = Some((stats, jiff::ZonedDateTime::now()));
         }
         if let Ok(counts) = state.read(|db| db.counts()).await {
-            systemd::status(&status_line(&counts, last));
+            systemd::status(&status_line(&counts, last.as_ref()));
         }
         let now = fetch::now();
         let next = state.read(|db| db.next_due()).await.ok().flatten();
@@ -334,14 +334,14 @@ async fn schedule(state: Arc<AppState>, default_interval: u64) {
 
 fn status_line(
     counts: &db::Counts,
-    last: Option<(fetch::RefreshStats, chrono::DateTime<chrono::Local>)>,
+    last: Option<&(fetch::RefreshStats, jiff::ZonedDateTime)>,
 ) -> String {
     let mut s = format!("{} feeds, {} users", counts.feeds, counts.users);
     if let Some((stats, at)) = last {
         s.push_str(&format!(
             ", {} new at {}",
             stats.new_items,
-            at.format("%H:%M")
+            at.strftime("%H:%M")
         ));
     }
     if counts.failing_feeds > 0 {
@@ -370,7 +370,6 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use axum::{body::Body, http::Request};
-    use chrono::TimeZone;
     use pressbox_api::ItemQuery;
     use tower::ServiceExt;
 
@@ -591,15 +590,16 @@ mod tests {
             new_items: 5,
             unrecorded: 0,
         };
-        let at = chrono::Local
-            .with_ymd_and_hms(2026, 11, 9, 14, 5, 0)
+        let at = jiff::civil::date(2026, 11, 9)
+            .at(14, 5, 0, 0)
+            .to_zoned_datetime(jiff::tz::TimeZone::system())
             .unwrap();
         let failing = db::Counts {
             failing_feeds: 1,
             ..counts
         };
         assert_eq!(
-            status_line(&failing, Some((stats, at))),
+            status_line(&failing, Some(&(stats, at))),
             "12 feeds, 2 users, 5 new at 14:05, 1 failing"
         );
     }

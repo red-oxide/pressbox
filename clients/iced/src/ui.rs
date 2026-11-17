@@ -4,7 +4,6 @@
 //! Layout: the pairing screen, and the reader's three panes (sources,
 //! items, article).
 
-use chrono::{Local, TimeZone};
 use iced::{
     Alignment, Element, Fill, Font, Length, Theme,
     widget::{button, column, container, row, rule, scrollable, slider, space, text, text_input},
@@ -660,10 +659,15 @@ fn player_bar(playback: &Playback) -> Element<'_, Message> {
 }
 
 fn date(unix: i64) -> String {
-    match Local.timestamp_opt(unix, 0).single() {
-        Some(t) if t.date_naive() == Local::now().date_naive() => t.format("%H:%M").to_string(),
-        Some(t) => t.format("%b %-d, %Y").to_string(),
-        None => String::new(),
+    let Ok(at) = jiff::Timestamp::from_second(unix) else {
+        return String::new();
+    };
+    let local = jiff::tz::TimeZone::system();
+    let t = at.to_zoned_datetime(local.clone());
+    if t.date() == jiff::Timestamp::now().to_zoned_datetime(local).date() {
+        t.strftime("%H:%M").to_string()
+    } else {
+        t.strftime("%b %-d, %Y").to_string()
     }
 }
 
@@ -988,7 +992,7 @@ mod tests {
 
     #[test]
     fn dates_show_the_time_today() {
-        let now = chrono::Utc::now().timestamp();
+        let now = jiff::Timestamp::now().as_second();
         assert_eq!(date(now).len(), 5, "like 14:05");
         assert!(date(1_793_700_000).ends_with(", 2026"));
         assert_eq!(date(i64::MAX), "");

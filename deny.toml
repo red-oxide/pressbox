@@ -44,6 +44,9 @@ ignore = true
 ignore = [
   # Unmaintained, no replacement yet; all come in through iced 0.14 for
   # pressbox-iced only. Drop each once an iced release moves off it.
+  # Unmaintained; pressbox itself uses jiff, but feed-rs (latest, 3.0.0)
+  # still parses dates with chrono. Drop once a feed-rs release moves off it.
+  { id = "RUSTSEC-2026-0543", reason = "chrono, via feed-rs" },
   { id = "RUSTSEC-2024-0436", reason = "paste, a proc-macro used by wgpu's Metal backend (macOS)" },
   { id = "RUSTSEC-2026-0192", reason = "ttf-parser, via cosmic-text and fontdb" },
   { id = "RUSTSEC-2026-0370", reason = "zvariant, folded into zbus; via mundy (dark mode)" },

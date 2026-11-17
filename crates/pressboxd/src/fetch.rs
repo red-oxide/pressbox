@@ -221,7 +221,7 @@ impl Links {
 }
 
 pub fn now() -> i64 {
-    chrono::Utc::now().timestamp()
+    jiff::Timestamp::now().as_second()
 }
 
 /// How a poll went, for scheduling the next one.
@@ -269,9 +269,10 @@ pub fn retry_after(headers: &HeaderMap, now: i64) -> Option<u64> {
     if let Ok(secs) = value.parse() {
         return Some(secs);
     }
-    let at = chrono::DateTime::parse_from_rfc2822(value)
+    let at = jiff::fmt::rfc2822::parse(value)
         .ok()?
-        .timestamp();
+        .timestamp()
+        .as_second();
     Some(u64::try_from(at - now).unwrap_or(0))
 }
 
