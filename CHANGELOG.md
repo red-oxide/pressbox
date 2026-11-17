@@ -18,7 +18,7 @@ change. The Apple and Android apps,
 [pressbox-android](https://github.com/red-oxide/pressbox-android), have their
 own releases.
 
-## [26.0.0] - Unreleased
+## [26.0.0] - 2026-11-17
 
 The first release.
 
@@ -211,8 +211,8 @@ The first release.
 
 ### Project
 
-- Licenses: server AGPL-3.0-only, clients GPL-3.0-only, logo CC-BY-SA-4.0;
-  REUSE compliant.
+- Licenses: server AGPL-3.0-only, clients GPL-3.0-only, logo CC-BY-SA-4.0; REUSE
+  compliant.
 
 - Checks: NixOS and Home Manager module tests, a NixOS VM test, treefmt and
   reuse lint; `cargo deny` in CI.
