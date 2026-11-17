@@ -20,11 +20,38 @@ own releases.
 
 ## [26.0.0] - Unreleased
 
+The first release.
+
 - The logo's home plate is filled rather than outlined, matching the
   pressbox-darwin and pressbox-android app icons. It is also pressbox-iced's
   icon on Linux.
 
 ### Server
+
+- pressboxd: feeds and users declared in NixOS (`services.pressbox`), with
+  shared feeds plus each user's own, and fully separate read and starred state
+  per user. RSS 0.9x/1.0/2.0, Atom and JSON Feed, with conditional requests,
+  backoff and sanitized HTML.
+
+- Full articles: `fullText = true` on a feed fetches each new item's page and
+  keeps its main content, for feeds that only carry a summary.
+
+- Retention by count (`maxItemsPerFeed`) and age (`maxAgeDays`); starred items
+  are always kept.
+
+- Full-text search (SQLite FTS5).
+
+- Devices pair with a short code that a signed-in device or `pressboxctl`
+  approves; admins can approve for anyone. Pairing requests are limited per
+  client address, with `behindProxy` for reverse proxies.
+
+- HTTP API under `/api/v1`, including `GET /api/v1/version` without a token.
+
+- systemd integration: notify and watchdog, socket activation, credentials,
+  journald logging, and a backup timer.
+
+- `pressboxctl`: status, users, devices, pairing, refresh, backups, OPML export,
+  `opml-to-nix`, and `discover` to find a site's feeds.
 
 - A feed keeps its artwork and medium when it answers 304 Not Modified. They
   were cleared, so feeds that honour their ETag or Last-Modified lost their
@@ -157,6 +184,8 @@ own releases.
 
 ### Terminal client
 
+- `pressbox`, a terminal reader (ratatui).
+
 - Up Next, a row under Starred that lists the server's queue: `a` adds an
   episode or takes it out, `n` plays it next, `J`/`K` reorder, and the next
   episode starts when one ends.
@@ -181,6 +210,12 @@ own releases.
   unset).
 
 ### Project
+
+- Licenses: server AGPL-3.0-only, clients GPL-3.0-only, logo CC-BY-SA-4.0;
+  REUSE compliant.
+
+- Checks: NixOS and Home Manager module tests, a NixOS VM test, treefmt and
+  reuse lint; `cargo deny` in CI.
 
 - `SECURITY.md`: how to report a vulnerability privately, and what's in scope.
 
