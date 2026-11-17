@@ -16,10 +16,10 @@ Please report privately, not in a public issue, discussion or pull request:
   on GitHub (preferred), or
 - email chris@red-oxide.org.
 
-Say which part is affected (pressboxd, `pressboxctl`, a client, or a Nix
-module) and at what version or commit, what an attacker needs to start with
-(nothing, network access, a paired device, an admin device, or control of a
-feed's content), how to reproduce it, and what it lets them do.
+Say which part is affected (pressboxd, `pressboxctl`, a client, or a Nix module)
+and at what version or commit, what an attacker needs to start with (nothing,
+network access, a paired device, an admin device, or control of a feed's
+content), how to reproduce it, and what it lets them do.
 
 ## What happens next
 
@@ -46,8 +46,8 @@ Everything in this repository, for example:
 - content from feeds: HTML that gets through sanitizing, or a feed that gets
   pressboxd to fetch a private address despite the public-only check (through
   article, chapter or transcript URLs, redirects, or DNS)
-- the control socket: `pressboxctl` access for a local user who shouldn't
-  have it
+- the control socket: `pressboxctl` access for a local user who shouldn't have
+  it
 - the NixOS and Home Manager modules: insecure defaults, or files and sockets
   with loose permissions
 
