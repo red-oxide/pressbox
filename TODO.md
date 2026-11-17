@@ -12,10 +12,6 @@ apps keep their own lists in
 [pressbox-android](https://github.com/red-oxide/pressbox-android); this one only
 holds what they need from the server.
 
-## Release
-
-- [ ] Release 26.0.0: date the changelog entry, push it, and run `just release`.
-
 ## Server and API
 
 - [ ] Sync changes since a point in time. Read, starred, position and queue
