@@ -221,6 +221,9 @@
             services.pressbox = {
               enable = true;
               tokenFile = "/etc/pressbox-token";
+              # The article fullText fetches is served from this machine, which
+              # is off limits by default (the unit tests check that refusal).
+              fetchPrivateAddresses = true;
               feeds.test = {
                 url = "http://localhost/feed.xml";
                 refreshInterval = 600;
