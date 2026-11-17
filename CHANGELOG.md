@@ -89,8 +89,8 @@ own releases.
   "Why Vec<T> beats LinkedList<T>" was stored as "Why Vec beats LinkedList" and
   "a < b and c > d" as "a d". Atom titles now follow their `type`, JSON Feed
   titles are kept as written, and RSS titles (and chapter and enclosure titles)
-  lose only lowercase HTML tags such as `<b>` or `<em>`. Items stored by 0.1.0
-  are corrected on the first fetch after upgrading.
+  lose only lowercase HTML tags such as `<b>` or `<em>`. Items stored before
+  this release are corrected on the first fetch after upgrading.
 
 - An item's `url` and a feed's `site_url` are absolute `http(s)` URLs or left
   out, as media URLs already were. A feed could put `javascript:` or `file:`
@@ -184,40 +184,4 @@ own releases.
 
 - `SECURITY.md`: how to report a vulnerability privately, and what's in scope.
 
-## [0.1.0] - 2026-11-07
-
-The first release.
-
-### Server
-
-- pressboxd: feeds and users declared in NixOS (`services.pressbox`), with
-  shared feeds plus each user's own, and fully separate read and starred state
-  per user. RSS 0.9x/1.0/2.0, Atom and JSON Feed, with conditional requests,
-  backoff and sanitized HTML.
-- Full articles: `fullText = true` on a feed fetches each new item's page and
-  keeps its main content, for feeds that only carry a summary.
-- Retention by count (`maxItemsPerFeed`) and age (`maxAgeDays`); starred items
-  are always kept.
-- Full-text search (SQLite FTS5).
-- Devices pair with a short code that a signed-in device or `pressboxctl`
-  approves; admins can approve for anyone. Pairing requests are limited per
-  client address, with `behindProxy` for reverse proxies.
-- HTTP API under `/api/v1`, including `GET /api/v1/version` without a token.
-- systemd integration: notify and watchdog, socket activation, credentials,
-  journald logging, and a backup timer.
-- `pressboxctl`: status, users, devices, pairing, refresh, backups, OPML export,
-  `opml-to-nix`, and `discover` to find a site's feeds.
-
-### Clients
-
-- `pressbox`, a terminal reader (ratatui).
-
-### Project
-
-- Licenses: server AGPL-3.0-only, terminal client GPL-3.0-only, logo
-  CC-BY-SA-4.0; REUSE compliant.
-- Checks: NixOS and Home Manager module tests, a NixOS VM test, treefmt and
-  reuse lint; `cargo deny` in CI.
-
-[0.1.0]: https://github.com/red-oxide/pressbox/releases/tag/v0.1.0
-[26.0.0]: https://github.com/red-oxide/pressbox/compare/v0.1.0...v26.0.0
+[26.0.0]: https://github.com/red-oxide/pressbox/releases/tag/v26.0.0
