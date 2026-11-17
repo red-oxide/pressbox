@@ -6,6 +6,7 @@ set dotenv-load := false
 # Cargo comes from the dev shell: use it directly inside `nix develop` (or
 # direnv), and run it through `nix develop` otherwise.
 cargo := if env("IN_NIX_SHELL", "") == "" { "nix develop --command cargo" } else { "cargo" }
+dev := if env("IN_NIX_SHELL", "") == "" { "nix develop --command " } else { "" }
 
 # List available recipes
 default:
@@ -86,6 +87,48 @@ update-input input:
 
 # Everything CI checks
 verify: fmt-check lint test deny check
+
+# From a clean, pushed master: check that the changelog entry for the version
+# in Cargo.toml is dated, run `just verify`, then tag `vX.Y.Z`, push the tag and
+# publish the GitHub release with that entry as its notes (`gh auth login`
+# once first).
+# Tag and publish a release of the version in Cargo.toml
+release:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    fail() { echo "error: $*" >&2; exit 1; }
+    version=$(awk -F'"' '/^\[workspace\.package\]/ { p = 1 } p && /^version/ { print $2; exit }' Cargo.toml)
+    tag="v$version"
+    heading=$(grep -F -m1 "## [$version] - " CHANGELOG.md) || fail "CHANGELOG.md has no entry for $version"
+    date=${heading#"## [$version] - "}
+    [[ $date =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || fail "CHANGELOG.md's entry for $version is dated '$date', not YYYY-MM-DD"
+    [ -z "$(git status --porcelain)" ] || fail "the working tree has changes; commit or stash them first"
+    [ "$(git branch --show-current)" = master ] || fail "release from master"
+    git fetch --quiet origin master
+    [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/master)" ] || fail "master isn't the same as origin/master; push or pull first"
+    if git rev-parse -q --verify "refs/tags/$tag" > /dev/null || [ -n "$(git ls-remote --tags origin "refs/tags/$tag")" ]; then
+        fail "$tag already exists"
+    fi
+    # The entry, up to the next one or the link references, with each paragraph
+    # and list item on one line: release notes keep the changelog's line breaks.
+    notes=$(mktemp)
+    trap 'rm -f "$notes"' EXIT
+    awk -v heading="$heading" '
+        function flush() { if (cur != "") { emit(cur); cur = "" } }
+        function emit(s) { if (n++) print ""; print s }
+        !found { found = ($0 == heading); next }
+        /^## \[/ || /^\[[^]]+\]: / { exit }
+        /^[[:space:]]*$/ { flush(); next }
+        /^#/ { flush(); emit($0); next }
+        /^- / { flush(); cur = $0; next }
+        { sub(/^[[:space:]]+/, ""); cur = cur == "" ? $0 : cur " " $0 }
+        END { flush() }
+    ' CHANGELOG.md > "$notes"
+    [ -s "$notes" ] || fail "CHANGELOG.md's entry for $version is empty"
+    just verify
+    git tag -a "$tag" -m "pressbox $version"
+    git push origin "$tag"
+    {{ dev }}gh release create "$tag" --verify-tag --title "pressbox $version" --notes-file "$notes"
 
 # Remove Cargo and Nix build output
 clean:

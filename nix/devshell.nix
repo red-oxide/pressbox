@@ -20,7 +20,7 @@ _: {
       # the libraries pressbox-iced opens at run time, so `just gui` finds a
       # display, and cargo-tarpaulin for `just coverage`. GStreamer (and its
       # plugins, for `just gui`) for the desktop client's podcast player, and
-      # mpv for the terminal client's.
+      # mpv for the terminal client's. gh for `just release`.
       devShells.default = craneLib.devShell {
         inputsFrom = [ config.packages.pressboxd ];
         packages = [
@@ -30,6 +30,7 @@ _: {
           pkgs.cargo-tarpaulin
           pkgs.pkg-config
           pkgs.mpv
+          pkgs.gh
           config.treefmt.build.wrapper
         ]
         ++ gstLibs;

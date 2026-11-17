@@ -184,4 +184,9 @@ own releases.
 
 - `SECURITY.md`: how to report a vulnerability privately, and what's in scope.
 
+- `just release` makes a release from a clean, pushed master: it checks that the
+  changelog entry for `version` in `Cargo.toml` is dated, runs `just verify`,
+  tags and pushes `vX.Y.Z`, and publishes the GitHub release with the entry as
+  its notes.
+
 [26.0.0]: https://github.com/red-oxide/pressbox/releases/tag/v26.0.0

@@ -14,11 +14,7 @@ holds what they need from the server.
 
 ## Release
 
-- [ ] Release 26.0.0: date the changelog entry, tag `v26.0.0`, and publish a
-  GitHub release with that entry as its notes.
-- [ ] A release workflow: on a `v*` tag, check that the tag matches `version` in
-  `Cargo.toml`, run `just verify`, and create the release from the
-  changelog.
+- [ ] Release 26.0.0: date the changelog entry, push it, and run `just release`.
 
 ## Server and API
 

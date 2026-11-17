@@ -142,7 +142,10 @@ a dependency shows up without a code change. Its allowed licenses are in
 
 Changes are recorded in [CHANGELOG.md](CHANGELOG.md), and what's planned in
 [TODO.md](TODO.md). A release bumps `version` in `Cargo.toml`, moves the
-changelog's entries under the new version, and is tagged `vX.Y.Z`.
+changelog's entries under the new version with the date, and is tagged
+`vX.Y.Z`: once that's committed and pushed, `just release` checks the dated
+entry, runs `just verify`, then tags, pushes the tag and publishes the GitHub
+release with that entry as its notes.
 
 To run the server locally, write a `pressbox.toml` (same keys as the module
 generates: `listen`, `database`, `refresh_interval`, `max_items_per_feed`,
