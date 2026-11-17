@@ -132,12 +132,14 @@ own releases.
 - Up Next: the server's queue in the sidebar, Add to Up Next and Play next on
   episodes (`a`, `n`), ↑ and ↓ (`J`, `K`) to reorder, and the next episode
   starts when one ends.
+
 - Plays podcasts with GStreamer: audio in the background, video above the
   article, with a player bar (progress, chapters, skip, speed without pitch
   change), clickable chapters and a transcript that follows playback. Positions
   sync with the server and episodes played to the end are marked read. Appears
   in the system's media controls (MPRIS, macOS Now Playing). The Nix package
   carries the GStreamer plugins it needs.
+
 - `pressbox-iced`, a desktop reader built with iced 0.14 (`clients/iced`):
   sources with unread counts (unread, all, starred, tags, feeds), the item list
   with search and paging, and the article with star, read/unread and open in
@@ -145,6 +147,7 @@ own releases.
   other devices. Birdland colors, following the system's light or dark mode.
   Packaged with a desktop entry; Home Manager installs it with
   `programs.pressbox.desktop.enable`.
+
 - A server address that isn't one (`http://bad host`) is reported when you press
   Pair.
 
@@ -157,15 +160,19 @@ own releases.
 - Up Next, a row under Starred that lists the server's queue: `a` adds an
   episode or takes it out, `n` plays it next, `J`/`K` reorder, and the next
   episode starts when one ends.
+
 - Plays podcasts in mpv: `p` plays or pauses, `V` plays the video, `x` stops,
   `,`/`.` seek, `[`/`]` move between chapters and `-`/`+` change the speed. The
   position syncs with the server, so playback resumes on any client, and an
   episode played to the end is marked read. The reader lists chapters and `t`
   shows the transcript. `client.json` (and Home Manager) can set the `player`.
+
 - Pages by cursor, falling back to offsets with an older server; asks for gzip
   responses. Loading more items no longer repeats the first page.
+
 - `M` marks the selected item and every item below it read, including ones not
   loaded yet.
+
 - `u` cycles unread, all and read items, so read posts can be listed on their
   own.
 

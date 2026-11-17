@@ -148,11 +148,10 @@ generates: `listen`, `database`, `refresh_interval`, `max_items_per_feed`,
 `max_age_days`, `behind_proxy`, `fetch_private_addresses`, `control_socket`,
 `backup_dir`, `token_file`, `[feeds.<id>]` with `url`, `title`, `tags`,
 `refresh_interval`, `full_text`, and `[users.<name>]` with `admin` and
-`[users.<name>.feeds.<id>]`) and run
-`just server` (or `cargo run -p pressboxd -- -c pressbox.toml`). The control
-socket defaults to `pressbox.sock` next to the database:
-`just ctl -s ./pressbox.sock status`. `just tui` and `just gui` run the terminal
-and desktop clients the same way.
+`[users.<name>.feeds.<id>]`) and run `just server` (or
+`cargo run -p pressboxd -- -c pressbox.toml`). The control socket defaults to
+`pressbox.sock` next to the database: `just ctl -s ./pressbox.sock status`.
+`just tui` and `just gui` run the terminal and desktop clients the same way.
 
 ## License
 
