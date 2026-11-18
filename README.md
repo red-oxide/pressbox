@@ -140,9 +140,11 @@ just coverage        # line coverage per file; fails below 95%, as CI does
 a dependency shows up without a code change. Its allowed licenses are in
 `deny.toml`; anything else needs a deliberate edit there.
 
-Changes are recorded in [CHANGELOG.md](CHANGELOG.md), and what's planned in
-[TODO.md](TODO.md). A release bumps `version` in `Cargo.toml`, moves the
-changelog's entries under the new version with the date, and is tagged `vX.Y.Z`:
+Changes are recorded in [CHANGELOG.md](CHANGELOG.md), and what's planned in the
+[issues](https://github.com/red-oxide/pressbox/issues), grouped by release in
+[milestones](https://github.com/red-oxide/pressbox/milestones). A release bumps
+`version` in `Cargo.toml`, moves the changelog's entries under the new version
+with the date, and is tagged `vX.Y.Z`:
 once that's committed and pushed, `just release` checks the dated entry, runs
 `just verify`, then tags, pushes the tag and publishes the GitHub release with
 that entry as its notes.
