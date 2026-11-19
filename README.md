@@ -10,7 +10,7 @@ SPDX-License-Identifier: GPL-3.0-only
 A self-hosted RSS/Atom/JSON Feed aggregator. You declare feeds (and the people
 using them) in your NixOS configuration, a small Rust server polls them, and
 terminal and desktop clients on NixOS, an
-[iPhone, iPad and Mac app](https://github.com/red-oxide/pressbox-darwin) and an
+[iPhone app](https://github.com/red-oxide/pressbox-darwin) and an
 [Android app](https://github.com/red-oxide/pressbox-android) share read and
 starred state through its API. Each client is paired with a short code; there is
 no website and no shared secret.
@@ -36,7 +36,7 @@ NixOS config ──▶ pressbox.toml ──▶ pressboxd ──▶ SQLite (items
 | `pressbox-api` | `crates/pressbox-api` | JSON types shared by the Rust crates |
 | `pressbox` | `clients/tui` | Terminal client (ratatui) |
 | `pressbox-iced` | `clients/iced` | Desktop client (iced) |
-| Apple app | [pressbox-darwin](https://github.com/red-oxide/pressbox-darwin) | SwiftUI client (iPhone, iPad, Mac), in its own repo |
+| Apple app | [pressbox-darwin](https://github.com/red-oxide/pressbox-darwin) | SwiftUI client (iPhone), in its own repo |
 | Android app | [pressbox-android](https://github.com/red-oxide/pressbox-android) | Jetpack Compose client, in its own repo |
 | NixOS module | `modules/nixos.nix` | `services.pressbox` |
 | Home Manager module | `modules/home-manager.nix` | `programs.pressbox` |
@@ -54,12 +54,12 @@ NixOS config ──▶ pressbox.toml ──▶ pressboxd ──▶ SQLite (items
 
 ## Apple and Android apps
 
-The mobile and Mac apps are in their own repos, with their own releases, and
+The mobile apps are in their own repos, with their own releases, and
 talk to the server through API v1; see their READMEs for building them and what
 they can do.
 
 - [pressbox-darwin](https://github.com/red-oxide/pressbox-darwin) (formerly
-  pressbox-ios): iPhone and iPad on iOS 18, and Mac on macOS 15.
+  pressbox-ios): iPhone on iOS 27 or later. iPad and Mac apps are planned.
 - [pressbox-android](https://github.com/red-oxide/pressbox-android): Android 12
   or later.
 

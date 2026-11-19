@@ -106,10 +106,10 @@ clients until they unstar them. Adding it back resumes it.
 | `tokenFile` | `null` | Optional static token; acts as the first admin |
 | `configFile` | read-only | The generated `pressbox.toml`, for inspection |
 
-For the Apple app, serve pressbox over HTTPS. iOS and macOS only allow plain
-HTTP to local network addresses; the Android app allows it but warns outside the
-local network or a tailnet. `tailscale serve --bg 8470` is the least work; a
-reverse proxy with ACME works too.
+For the Apple app, serve pressbox over HTTPS. iOS only allows plain HTTP to
+local network addresses; the Android app allows it but warns outside the local
+network or a tailnet. `tailscale serve --bg 8470` is the least work; a reverse
+proxy with ACME works too.
 
 ### How feeds are fetched
 
