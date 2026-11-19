@@ -30,7 +30,7 @@ NixOS config ──▶ pressbox.toml ──▶ pressboxd ──▶ SQLite (items
 ```
 
 | Part | Path | What it is |
-| ------------------- | ----------------------------------------------------------------- | --------------------------------------------------- |
+| ------------------- | ----------------------------------------------------------------- | ---------------------------------------- |
 | `pressboxd` | `crates/pressboxd` | Server: polling, storage, search, API |
 | `pressboxctl` | `crates/pressboxd/src/bin` | Pairing, devices, backups, OPML |
 | `pressbox-api` | `crates/pressbox-api` | JSON types shared by the Rust crates |
@@ -54,9 +54,8 @@ NixOS config ──▶ pressbox.toml ──▶ pressboxd ──▶ SQLite (items
 
 ## Apple and Android apps
 
-The mobile apps are in their own repos, with their own releases, and
-talk to the server through API v1; see their READMEs for building them and what
-they can do.
+The mobile apps are in their own repos, with their own releases, and talk to the
+server through API v1; see their READMEs for building them and what they can do.
 
 - [pressbox-darwin](https://github.com/red-oxide/pressbox-darwin) (formerly
   pressbox-ios): iPhone on iOS 27 or later. iPad and Mac apps are planned.
