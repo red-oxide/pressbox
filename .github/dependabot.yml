@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 Chris Palmer <chris@red-oxide.org>
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Actions are pinned to commits, so a moved tag can't change what CI runs;
+# this keeps the pins (and the version comments beside them) up to date.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore"
+    groups:
+      actions:
+        patterns: ["*"]
