@@ -214,7 +214,7 @@
             }
           },
           "400": {
-            "description": "A malformed cursor",
+            "description": "A malformed cursor, or a search over 16 words or 500 characters",
             "content": {
               "application/json": {
                 "schema": {
@@ -265,6 +265,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Updated"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A search over 16 words or 500 characters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -694,6 +704,53 @@
             "token": []
           }
         ]
+      },
+      "delete": {
+        "tags": [
+          "server"
+        ],
+        "summary": "Revokes the device whose token made the request, as when a client\nsigns out. The static token isn't a device: it is removed from the\nconfiguration instead.",
+        "operationId": "unpair",
+        "responses": {
+          "204": {
+            "description": "This device's token is revoked"
+          },
+          "400": {
+            "description": "The static token is not a device",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The device was already removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ]
       }
     },
     "/api/v1/openapi.json": {
@@ -858,7 +915,7 @@
         "tags": [
           "pairing"
         ],
-        "summary": "Denies a pairing.",
+        "summary": "Denies a pairing. Only admins may, so one user can't turn away another's\nnew devices.",
         "operationId": "denyPairing",
         "parameters": [
           {
@@ -877,6 +934,16 @@
           },
           "401": {
             "description": "A missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only admins can deny pairings",
             "content": {
               "application/json": {
                 "schema": {

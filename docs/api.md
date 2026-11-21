@@ -13,21 +13,22 @@ user, and every answer is about that user's feeds and state. Timestamps are Unix
 seconds.
 
 | Method | Path | Body / query | Response |
-| ------ | --------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| ------ | --------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | GET | `/health` | | `ok` |
 | GET | `/api/v1/version` | | `{version, api}`, e.g. `{"version": "26.0.0", "api": 1}` |
 | GET | `/api/v1/openapi.json` | | the OpenAPI description |
 | POST | `/api/v1/pair` | `{"name": str}` | `{code, poll_id, expires_in}`; 429 when too many wait |
 | GET | `/api/v1/pair/{poll_id}` | | 202 pending; `{token, name}` once; 404 |
 | GET | `/api/v1/me` | | `{user, admin, device}` |
+| DELETE | `/api/v1/me` | | 204; revokes the token sent, 400 for the static token |
 | GET | `/api/v1/feeds` | | `[Feed]` |
 | GET | `/api/v1/items` | `feed`, `tag`, `unread`, `starred`, `media`, `in_progress`, `q`, `limit`, `cursor` | `{items, next_cursor}` |
 | GET | `/api/v1/items/{id}` | | `Item` with `content` |
 | PUT | `/api/v1/items/{id}/read` | `{"value": bool}` | 204 |
 | PUT | `/api/v1/items/{id}/starred` | `{"value": bool}` | 204 |
 | PUT | `/api/v1/items/{id}/position` | `{"position": seconds}` | 204 |
-| GET | `/api/v1/items/{id}/chapters` | | `{chapters: [Chapter]}`; 404 if none; 502 if unreadable |
-| GET | `/api/v1/items/{id}/transcript` | | `{segments: [Segment]}`; 404 if none; 502 if unreadable |
+| GET | `/api/v1/items/{id}/chapters` | | `{chapters: [Chapter]}`; 404 if none; 502 if unreachable or unreadable |
+| GET | `/api/v1/items/{id}/transcript` | | `{segments: [Segment]}`; 404 if none; 502 if unreachable or unreadable |
 | GET | `/api/v1/queue` | | `{items}` |
 | PUT | `/api/v1/queue` | `{"ids": [id]}` | `{items}`; 400 over 500 |
 | POST | `/api/v1/feeds/{id}/read-all` | | `{"updated": n}` |
@@ -35,7 +36,7 @@ seconds.
 | POST | `/api/v1/refresh` | | 202 |
 | GET | `/api/v1/pairings` | | `[{code, name, requested}]` |
 | POST | `/api/v1/pairings/{code}/approve` | optional `{"user": str}` (admins only) | `{name, user}` |
-| DELETE | `/api/v1/pairings/{code}` | | 204 |
+| DELETE | `/api/v1/pairings/{code}` | | 204; 403 unless admin |
 
 [`openapi.json`](./openapi.json) describes every route, parameter and JSON shape
 as OpenAPI 3.1, for generating clients or checking them against the server. The
@@ -60,12 +61,19 @@ filters as `GET /api/v1/items` (`feed`, `tag`, `unread`, `starred`, `q`), and
 with `"from": id` only that item and the older ones after it. `updated` counts
 the items that were unread.
 
+A chapters or transcript file that can't be fetched or read is a 502, and stays
+one for 15 minutes without being fetched again.
+
+`DELETE /api/v1/me` is for signing out: it revokes the device whose token it is
+sent with, which then gets 401s like any revoked device.
+
 Responses are compressed (gzip or brotli) when the request's `Accept-Encoding`
 allows it.
 
-`q` matches every word as a prefix, in titles and text. With `q`, `unread` is
-usually left out so read items are found too. Breaking changes will go to a new
-version (`/api/v2/`), served alongside `v1` for a while.
+`q` matches every word as a prefix, in titles and text; it may have at most 16
+words and 500 characters, or the request is a 400. With `q`, `unread` is usually
+left out so read items are found too. Breaking changes will go to a new version
+(`/api/v2/`), served alongside `v1` for a while.
 
 ### Podcasts
 

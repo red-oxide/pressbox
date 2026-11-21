@@ -20,7 +20,7 @@
 
 use std::{
     fmt::Write as _,
-    os::unix::fs::PermissionsExt,
+    os::unix::fs::{DirBuilderExt, PermissionsExt},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -67,21 +67,48 @@ pub fn router(state: Arc<AppState>) -> Router {
         .with_state(state)
 }
 
-/// Binds the control socket, replacing a stale one, readable only by us.
+/// Binds the control socket, replacing a stale one, usable only by us.
+///
+/// A socket is created with the process's umask, and anyone who may write
+/// to it may connect. So it is bound inside a new directory only we can
+/// enter, made private there, and only then moved into place: there is no
+/// moment when it is at `path` with looser permissions, whatever the umask.
 pub fn bind(path: &Path) -> Result<tokio::net::UnixListener> {
-    if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
-        std::fs::create_dir_all(dir)?;
-    }
+    let dir = path
+        .parent()
+        .filter(|d| !d.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    std::fs::create_dir_all(dir)?;
     match std::fs::remove_file(path) {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
             return Err(e).with_context(|| format!("removing stale {}", path.display()));
         }
         _ => {}
     }
-    let listener = tokio::net::UnixListener::bind(path)
-        .with_context(|| format!("binding control socket {}", path.display()))?;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
-    Ok(listener)
+    let name = path
+        .file_name()
+        .with_context(|| format!("{} names no file", path.display()))?;
+    let mut staging_name = std::ffi::OsString::from(".");
+    staging_name.push(name);
+    staging_name.push(format!(".{}", std::process::id()));
+    let staging = dir.join(staging_name);
+    // Left over from a crash of an earlier process with this id.
+    let _ = std::fs::remove_dir_all(&staging);
+    std::fs::DirBuilder::new()
+        .mode(0o700)
+        .create(&staging)
+        .with_context(|| format!("creating {}", staging.display()))?;
+    let bound = (|| {
+        let inside = staging.join("control.sock");
+        let listener = tokio::net::UnixListener::bind(&inside)
+            .with_context(|| format!("binding control socket {}", path.display()))?;
+        std::fs::set_permissions(&inside, std::fs::Permissions::from_mode(0o600))?;
+        std::fs::rename(&inside, path)
+            .with_context(|| format!("moving the control socket to {}", path.display()))?;
+        Ok(listener)
+    })();
+    let _ = std::fs::remove_dir_all(&staging);
+    bound
 }
 
 async fn status(State(state): State<Arc<AppState>>) -> ApiResult<Json<Status>> {
@@ -491,6 +518,13 @@ mod tests {
         let _listener = bind(&path).unwrap();
         let mode = std::fs::metadata(&path).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600);
+        assert_eq!(
+            std::fs::read_dir(path.parent().unwrap()).unwrap().count(),
+            1,
+            "no staging directory is left"
+        );
+        // Moved into place, it still takes connections.
+        tokio::net::UnixStream::connect(&path).await.unwrap();
 
         // Something that isn't a stale socket is left alone.
         let occupied = dir.join("occupied");

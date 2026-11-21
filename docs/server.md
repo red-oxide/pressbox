@@ -74,9 +74,13 @@ like feed HTML. Clients show it in place of the feed's text, and search covers
 it. Pages without enough text to be an article keep the feed's own text.
 
 Article pages, and the chapters and transcripts podcasts link to, are URLs the
-feed supplies, so pressbox only fetches them from public addresses: a feed can't
-point it at your router or another service on your network. If a feed on your
-own network links to pages there, set `fetchPrivateAddresses = true`. Feeds
+feed supplies, so pressbox only fetches them from public addresses, and never
+from one of the server's own (a public address included): a feed can't point it
+at your router or another service on your network, or at a service on the server
+that the firewall keeps from the internet. Behind NAT, the router's public
+address isn't one of the server's; if the router forwards ports back to it,
+those services are as reachable as from anywhere else. If a feed on your own
+network links to pages there, set `fetchPrivateAddresses = true`. Feeds
 themselves are fetched from wherever their `url` says.
 
 Feed ids (the attribute names) may contain letters, digits, `-` and `_`. The
