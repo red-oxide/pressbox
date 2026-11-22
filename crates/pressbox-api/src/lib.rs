@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 
 /// A feed declared in the server configuration, with its current state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Feed {
     /// The attribute name used in the Nix configuration, e.g. `"lwn"`.
     pub id: String,
@@ -49,6 +50,7 @@ pub struct Feed {
 
 /// One entry from a feed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Item {
     pub id: i64,
     pub feed_id: String,
@@ -83,6 +85,7 @@ const fn is_zero(n: &u32) -> bool {
 /// links and JSON Feed attachments, with the iTunes and Podcasting 2.0
 /// (`podcast:`) tags that describe it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Media {
     /// The files: the feed's own enclosure first, then any
     /// `podcast:alternateEnclosure`s (other formats, bitrates or video) in
@@ -124,6 +127,7 @@ impl Media {
 
 /// One media file.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Enclosure {
     /// An `http(s)` URL.
     pub url: String,
@@ -155,6 +159,7 @@ impl Enclosure {
 
 /// A `podcast:transcript` file.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TranscriptFile {
     pub url: String,
     /// e.g. `text/vtt`, `application/x-subrip`, `application/json`,
@@ -169,6 +174,7 @@ pub struct TranscriptFile {
 
 /// Body for `PUT /api/v1/items/{id}/position`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Position {
     /// Seconds into the media. 0 forgets the position (when the media was
     /// finished, say).
@@ -178,6 +184,7 @@ pub struct Position {
 /// Response to `GET` and `PUT /api/v1/queue`: the user's Up Next list, the
 /// episodes to play next in order. Items come as in lists, without `content`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Queue {
     pub items: Vec<Item>,
 }
@@ -186,6 +193,7 @@ pub struct Queue {
 /// before. Clients add, remove and reorder by sending the list they want.
 /// Items the user can't see, items without media, and repeats are left out.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct QueueOrder {
     pub ids: Vec<i64>,
 }
@@ -193,12 +201,14 @@ pub struct QueueOrder {
 /// Response to `GET /api/v1/items/{id}/chapters`, from the episode's
 /// Podcasting 2.0 chapters file.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Chapters {
     /// In order of `start`.
     pub chapters: Vec<Chapter>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Chapter {
     /// Seconds from the start.
     pub start: f64,
@@ -221,11 +231,13 @@ pub struct Chapter {
 /// transcript (JSON, WebVTT, SRT or HTML), as timed segments. Very short
 /// cues (some files time every word) are joined into sentences.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Transcript {
     pub segments: Vec<Segment>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Segment {
     /// Seconds from the start; 0 for untimed (HTML or plain) transcripts.
     pub start: f64,
@@ -238,6 +250,7 @@ pub struct Segment {
 
 /// A page of items, newest first.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ItemPage {
     pub items: Vec<Item>,
     /// Pass as `cursor` to get the next page; `None` on the last page.
@@ -251,12 +264,14 @@ pub struct ItemPage {
 
 /// Body for `PUT /api/v1/items/{id}/read` and `PUT /api/v1/items/{id}/starred`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Flag {
     pub value: bool,
 }
 
 /// Response for `POST /api/v1/feeds/{id}/read-all`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Updated {
     pub updated: u32,
 }
@@ -264,6 +279,7 @@ pub struct Updated {
 /// Body of `POST /api/v1/items/read-all`: marks the items a list shows as
 /// read, in one request however many pages the list has.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct MarkRead {
     /// The list's filters, as for `GET /api/v1/items`. `limit`, `offset`
     /// and `cursor` are ignored.
@@ -277,6 +293,8 @@ pub struct MarkRead {
 
 /// Query parameters for `GET /api/v1/items`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema, utoipa::IntoParams))]
+#[cfg_attr(feature = "openapi", into_params(parameter_in = Query))]
 pub struct ItemQuery {
     /// Full-text search over titles and text. Words are matched as prefixes
     /// and all must appear.
@@ -310,6 +328,7 @@ pub struct ItemQuery {
 
 /// Body for `POST /api/v1/pair`: a client asking to be paired.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PairRequest {
     /// A name for the device, e.g. `"laptop"`. Shown when approving.
     pub name: String,
@@ -317,6 +336,7 @@ pub struct PairRequest {
 
 /// Response to `POST /api/v1/pair`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PairStart {
     /// Short code to approve, e.g. `"K7-4QX"`. Show it to the user.
     pub code: String,
@@ -328,6 +348,7 @@ pub struct PairStart {
 
 /// Response to `GET /api/v1/pair/{poll_id}` once approved. Returned only once.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PairApproved {
     /// The device's API token.
     pub token: String,
@@ -335,8 +356,18 @@ pub struct PairApproved {
     pub name: String,
 }
 
+/// Response to `GET /api/v1/pair/{poll_id}` (202) while the request waits
+/// for approval.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct PairPending {
+    /// Always `"pending"`.
+    pub status: String,
+}
+
 /// A pairing request waiting for approval.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PendingPairing {
     pub code: String,
     pub name: String,
@@ -346,6 +377,7 @@ pub struct PendingPairing {
 
 /// A paired device.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Device {
     pub name: String,
     /// The user it belongs to.
@@ -357,6 +389,7 @@ pub struct Device {
 /// Optional body for approving a pairing. Only admins may name another
 /// user; by default the device goes to the approver's user.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApproveRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user: Option<String>,
@@ -364,6 +397,7 @@ pub struct ApproveRequest {
 
 /// Response to approving a pairing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Approved {
     /// The device's name.
     pub name: String,
@@ -373,6 +407,7 @@ pub struct Approved {
 
 /// A user, as `pressboxctl users` lists them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct UserInfo {
     pub name: String,
     pub admin: bool,
@@ -380,11 +415,21 @@ pub struct UserInfo {
     pub feeds: u32,
 }
 
+/// The body of every error response (4xx and 5xx), e.g.
+/// `{"error": "not found"}`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct ErrorResponse {
+    /// What went wrong, in English, for showing to the user.
+    pub error: String,
+}
+
 /// The API version this crate describes: the `1` in `/api/v1`.
 pub const API_VERSION: u32 = 1;
 
 /// `GET /api/v1/version`, which needs no token.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Version {
     /// pressboxd's version, e.g. `26.0.0`.
     pub version: String,
@@ -394,6 +439,7 @@ pub struct Version {
 
 /// Response to `GET /api/v1/me`: who this token belongs to.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Me {
     pub user: String,
     pub admin: bool,
@@ -403,6 +449,7 @@ pub struct Me {
 
 /// Body for `POST /admin/devices`: create a device without pairing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct NewDeviceRequest {
     pub name: String,
     /// Required when there is more than one user.
@@ -412,6 +459,7 @@ pub struct NewDeviceRequest {
 
 /// Response to creating a device directly (control socket only).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct NewDevice {
     pub name: String,
     pub user: String,
@@ -420,6 +468,7 @@ pub struct NewDevice {
 
 /// Body for `POST /admin/backup`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct BackupRequest {
     /// How many backups to keep, newest first. Older ones are deleted.
     pub keep: u32,
@@ -427,6 +476,7 @@ pub struct BackupRequest {
 
 /// Response to `POST /admin/backup`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct BackupResult {
     pub path: String,
     pub removed: Vec<String>,
@@ -434,6 +484,7 @@ pub struct BackupResult {
 
 /// Response to `GET /admin/status`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Status {
     /// Feed URLs being fetched (each once, however many users follow it).
     pub feeds: u32,

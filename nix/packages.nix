@@ -22,6 +22,8 @@ _: {
         fileset = lib.fileset.unions [
           ../Cargo.toml
           ../Cargo.lock
+          # pressboxd's tests compare it with the API.
+          ../docs/openapi.json
           (craneLib.fileset.commonCargoSources ../crates)
           (craneLib.fileset.commonCargoSources ../clients/tui)
           (craneLib.fileset.commonCargoSources ../clients/iced)

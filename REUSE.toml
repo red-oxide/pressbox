@@ -10,4 +10,4 @@ version = 1
 [[annotations]]
 SPDX-FileCopyrightText  = "2026 Chris Palmer <chris@red-oxide.org>"
 SPDX-License-Identifier = "GPL-3.0-only"
-path                    = ["Cargo.lock", "flake.lock"]
+path                    = ["Cargo.lock", "docs/openapi.json", "flake.lock"]

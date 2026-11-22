@@ -6,15 +6,17 @@ SPDX-License-Identifier: GPL-3.0-only
 ## API
 
 The API is versioned: everything lives under `/api/v1/`, except `/health`.
-Pairing routes and `version` need no token (pairing is how a client gets one);
-every other route needs `Authorization: Bearer <token>`, a paired device's token
-or the static `tokenFile` token. A token belongs to one user, and every answer
-is about that user's feeds and state. Timestamps are Unix seconds.
+Pairing routes, `version` and `openapi.json` need no token (pairing is how a
+client gets one); every other route needs `Authorization: Bearer <token>`, a
+paired device's token or the static `tokenFile` token. A token belongs to one
+user, and every answer is about that user's feeds and state. Timestamps are Unix
+seconds.
 
 | Method | Path | Body / query | Response |
 | ------ | --------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | GET | `/health` | | `ok` |
 | GET | `/api/v1/version` | | `{version, api}`, e.g. `{"version": "26.0.0", "api": 1}` |
+| GET | `/api/v1/openapi.json` | | the OpenAPI description |
 | POST | `/api/v1/pair` | `{"name": str}` | `{code, poll_id, expires_in}`; 429 when too many wait |
 | GET | `/api/v1/pair/{poll_id}` | | 202 pending; `{token, name}` once; 404 |
 | GET | `/api/v1/me` | | `{user, admin, device}` |
@@ -34,6 +36,13 @@ is about that user's feeds and state. Timestamps are Unix seconds.
 | GET | `/api/v1/pairings` | | `[{code, name, requested}]` |
 | POST | `/api/v1/pairings/{code}/approve` | optional `{"user": str}` (admins only) | `{name, user}` |
 | DELETE | `/api/v1/pairings/{code}` | | 204 |
+
+[`openapi.json`](./openapi.json) describes every route, parameter and JSON shape
+as OpenAPI 3.1, for generating clients or checking them against the server. The
+server serves the same document at `GET /api/v1/openapi.json`. It is built from
+the server's routes and the `pressbox-api` types, and a test fails when the
+checked-in copy falls behind them; `just openapi` rewrites it. Errors are
+`{"error": "message"}`, with a message meant for showing to the user.
 
 Item lists come newest first. To get the next page, pass the previous page's
 `next_cursor` as `cursor` with the same filters; it is absent on the last page.

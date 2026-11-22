@@ -49,7 +49,8 @@ NixOS config ──▶ pressbox.toml ──▶ pressboxd ──▶ SQLite (items
 - [pressboxctl](./docs/pressboxctl.md): the admin CLI on the server
 - [Clients (Home Manager)](./docs/clients.md): the terminal and desktop clients
   and the Birdland bar
-- [API](./docs/api.md): the HTTP API clients use
+- [API](./docs/api.md): the HTTP API clients use, and its
+  [OpenAPI description](./docs/openapi.json)
 - [Security](./SECURITY.md): reporting a vulnerability privately
 
 ## Apple and Android apps
@@ -109,6 +110,7 @@ pressbox/
 ├── .github/workflows/             flake check, cargo-deny, lock updates
 ├── flake.nix, Cargo.toml, REUSE.toml, justfile
 ├── docs/                          user documentation: server, pairing, clients, API
+│                                  (and openapi.json, generated)
 ├── deny.toml                      allowed licenses and sources (cargo-deny)
 ├── CHANGELOG.md
 └── README.md

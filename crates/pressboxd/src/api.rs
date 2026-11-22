@@ -3,30 +3,13 @@
 
 //! The HTTP API used by every client.
 //!
-//! | Method | Path                          | Body / query     | Response           |
-//! |--------|-------------------------------|------------------|--------------------|
-//! | GET    | /health                       |                  | `ok`               |
-//! | POST   | /api/v1/pair                         | `PairRequest`    | `PairStart`        |
-//! | GET    | /api/v1/pair/{poll_id}               |                  | 202, `PairApproved`, 404 |
-//! | GET    | /api/v1/feeds                    |                  | `[Feed]`           |
-//! | GET    | /api/v1/items                    | `ItemQuery`      | `ItemPage`         |
-//! | GET    | /api/v1/items/{id}               |                  | `Item`             |
-//! | PUT    | /api/v1/items/{id}/read          | `Flag`           | 204                |
-//! | PUT    | /api/v1/items/{id}/starred       | `Flag`           | 204                |
-//! | PUT    | /api/v1/items/{id}/position      | `Position`       | 204                |
-//! | GET    | /api/v1/items/{id}/chapters      |                  | `Chapters`         |
-//! | GET    | /api/v1/items/{id}/transcript    |                  | `Transcript`       |
-//! | GET    | /api/v1/queue                    |                  | `Queue`            |
-//! | PUT    | /api/v1/queue                    | `QueueOrder`     | `Queue`            |
-//! | POST   | /api/v1/feeds/{id}/read-all      |                  | `Updated`          |
-//! | POST   | /api/v1/items/read-all           | `MarkRead`       | `Updated`          |
-//! | POST   | /api/v1/refresh                  |                  | 202                |
-//! | GET    | /api/v1/me                       |                  | `Me`               |
-//! | GET    | /api/v1/pairings                 |                  | `[PendingPairing]` |
-//! | POST   | /api/v1/pairings/{code}/approve  | `ApproveRequest` | `Approved`         |
-//! | DELETE | /api/v1/pairings/{code}          |                  | 204                |
+//! Each handler's `#[utoipa::path]` describes it, and routes are added with
+//! `utoipa-axum`'s `routes!`, so a route can't be served without being in the
+//! OpenAPI description ([`crate::openapi`], checked in as
+//! `docs/openapi.json`).
 //!
-//! Every route except `/health` and `/api/v1/pair*` needs
+//! Every route except `/health`, `/api/v1/version`, `/api/v1/openapi.json`
+//! and `/api/v1/pair*` needs
 //! `Authorization: Bearer <token>`, where the token
 //! is a paired device's token or the static `token_file` token. A token
 //! belongs to one user, and every answer is about that user's feeds and
@@ -40,14 +23,14 @@ use axum::{
     http::{StatusCode, header::AUTHORIZATION},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{delete, get, post, put},
 };
 use pressbox_api::{
-    ApproveRequest, Approved, Feed, Flag, Item, ItemPage, ItemQuery, MarkRead, Me, PairRequest,
-    PairStart, PendingPairing, Position, Queue, QueueOrder, Updated, Version,
+    ApproveRequest, Approved, Chapters, ErrorResponse, Feed, Flag, Item, ItemPage, ItemQuery,
+    MarkRead, Me, PairApproved, PairPending, PairRequest, PairStart, PendingPairing, Position,
+    Queue, QueueOrder, Transcript, Updated, Version,
 };
-use serde_json::json;
 use tower_http::compression::CompressionLayer;
+use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::{
     AppState,
@@ -57,41 +40,95 @@ use crate::{
     pairing::{PollState, StartError, hash_token},
 };
 
+pub type ApiRouter = OpenApiRouter<Arc<AppState>>;
+
+/// The `/api/v1` routes that need a token. [`router`] puts them behind
+/// [`auth`], and [`crate::openapi`] marks them as needing one.
+pub fn authenticated_routes() -> ApiRouter {
+    OpenApiRouter::new()
+        .routes(routes!(feeds))
+        .routes(routes!(read_all))
+        .routes(routes!(items))
+        .routes(routes!(mark_read))
+        .routes(routes!(item))
+        .routes(routes!(set_read))
+        .routes(routes!(set_starred))
+        .routes(routes!(set_position))
+        .routes(routes!(chapters))
+        .routes(routes!(transcript))
+        .routes(routes!(queue, set_queue))
+        .routes(routes!(refresh))
+        .routes(routes!(me))
+        .routes(routes!(pairings))
+        .routes(routes!(approve))
+        .routes(routes!(deny))
+}
+
+/// The `/api/v1` routes anyone may call. Pairing is how a client gets a
+/// token, so it needs none.
+pub fn public_routes() -> ApiRouter {
+    OpenApiRouter::new()
+        .routes(routes!(pair_start))
+        .routes(routes!(pair_poll))
+        .routes(routes!(version))
+        .routes(routes!(openapi_json))
+}
+
+/// Routes outside `/api/v1`.
+pub fn root_routes() -> ApiRouter {
+    OpenApiRouter::new().routes(routes!(health))
+}
+
 pub fn router(state: Arc<AppState>) -> Router {
-    let authenticated = Router::new()
-        .route("/feeds", get(feeds))
-        .route("/feeds/{id}/read-all", post(read_all))
-        .route("/items", get(items))
-        .route("/items/read-all", post(mark_read))
-        .route("/items/{id}", get(item))
-        .route("/items/{id}/read", put(set_read))
-        .route("/items/{id}/starred", put(set_starred))
-        .route("/items/{id}/position", put(set_position))
-        .route("/items/{id}/chapters", get(chapters))
-        .route("/items/{id}/transcript", get(transcript))
-        .route("/queue", get(queue).put(set_queue))
-        .route("/refresh", post(refresh))
-        .route("/me", get(me))
-        .route("/pairings", get(pairings))
-        .route("/pairings/{code}/approve", post(approve))
-        .route("/pairings/{code}", delete(deny))
-        .route_layer(middleware::from_fn_with_state(state.clone(), auth));
-    // Pairing is how a client gets a token, so it needs none.
-    let v1 = Router::new()
-        .route("/pair", post(pair_start))
-        .route("/pair/{poll_id}", get(pair_poll))
-        .route("/version", get(version))
-        .merge(authenticated);
-    Router::new()
-        .route("/health", get(|| async { "ok" }))
-        .nest("/api/v1", v1)
+    let authenticated =
+        authenticated_routes().route_layer(middleware::from_fn_with_state(state.clone(), auth));
+    let (router, _) = root_routes()
+        .nest("/api/v1", public_routes().merge(authenticated))
+        .split_for_parts();
+    router
         // Item HTML and long lists compress several times over; clients
         // that don't ask for it get plain responses.
         .layer(CompressionLayer::new())
         .with_state(state)
 }
 
-/// Public, so a client can check what it talks to before pairing.
+/// Tags grouping the operations in the OpenAPI description.
+pub mod tag {
+    pub const FEEDS: &str = "feeds";
+    pub const ITEMS: &str = "items";
+    pub const PODCASTS: &str = "podcasts";
+    pub const PAIRING: &str = "pairing";
+    pub const SERVER: &str = "server";
+}
+
+/// For load balancers and service managers.
+#[utoipa::path(
+    get, path = "/health", operation_id = "health", tag = tag::SERVER,
+    responses((status = 200, description = "The server is up", body = String, content_type = "text/plain", example = "ok")),
+)]
+async fn health() -> &'static str {
+    "ok"
+}
+
+/// This document, the API's OpenAPI description.
+#[utoipa::path(
+    get, path = "/openapi.json", operation_id = "getOpenApi", tag = tag::SERVER,
+    responses((status = 200, description = "The OpenAPI description", content_type = "application/json")),
+)]
+async fn openapi_json() -> Response {
+    (
+        [(axum::http::header::CONTENT_TYPE, "application/json")],
+        crate::openapi::json(),
+    )
+        .into_response()
+}
+
+/// What the server is. Public, so a client can check what it talks to
+/// before pairing.
+#[utoipa::path(
+    get, path = "/version", operation_id = "getVersion", tag = tag::SERVER,
+    responses((status = 200, body = Version)),
+)]
 async fn version() -> Json<Version> {
     Json(Version {
         version: env!("CARGO_PKG_VERSION").to_owned(),
@@ -130,7 +167,10 @@ impl IntoResponse for ApiError {
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal error")
             }
         };
-        (status, Json(json!({ "error": message }))).into_response()
+        let body = ErrorResponse {
+            error: message.to_owned(),
+        };
+        (status, Json(body)).into_response()
     }
 }
 
@@ -187,6 +227,11 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 
 type User = Extension<AuthUser>;
 
+/// Who this token belongs to.
+#[utoipa::path(
+    get, path = "/me", operation_id = "getMe", tag = tag::SERVER,
+    responses((status = 200, body = Me)),
+)]
 async fn me(Extension(user): User) -> Json<Me> {
     Json(Me {
         user: user.name,
@@ -195,6 +240,11 @@ async fn me(Extension(user): User) -> Json<Me> {
     })
 }
 
+/// The user's feeds.
+#[utoipa::path(
+    get, path = "/feeds", operation_id = "listFeeds", tag = tag::FEEDS,
+    responses((status = 200, body = Vec<Feed>)),
+)]
 async fn feeds(
     State(state): State<Arc<AppState>>,
     Extension(user): User,
@@ -202,6 +252,16 @@ async fn feeds(
     Ok(Json(state.read(move |db| db.feeds(user.id)).await?))
 }
 
+/// A page of items, newest first. To get the next page, pass the previous
+/// page's `next_cursor` as `cursor` with the same filters.
+#[utoipa::path(
+    get, path = "/items", operation_id = "listItems", tag = tag::ITEMS,
+    params(ItemQuery),
+    responses(
+        (status = 200, body = ItemPage),
+        (status = 400, description = "A malformed cursor", body = ErrorResponse),
+    ),
+)]
 async fn items(
     State(state): State<Arc<AppState>>,
     Extension(user): User,
@@ -214,6 +274,15 @@ async fn items(
     }
 }
 
+/// One item, with its full `content`.
+#[utoipa::path(
+    get, path = "/items/{id}", operation_id = "getItem", tag = tag::ITEMS,
+    params(("id" = i64, Path, description = "The item's `id`")),
+    responses(
+        (status = 200, body = Item),
+        (status = 404, description = "No such item, or not this user's", body = ErrorResponse),
+    ),
+)]
 async fn item(
     State(state): State<Arc<AppState>>,
     Extension(user): User,
@@ -226,6 +295,15 @@ async fn item(
         .ok_or(ApiError::NotFound)
 }
 
+/// Marks an item read or unread. Marking it read takes it out of Up Next.
+#[utoipa::path(
+    put, path = "/items/{id}/read", operation_id = "setRead", tag = tag::ITEMS,
+    params(("id" = i64, Path, description = "The item's `id`")), request_body = Flag,
+    responses(
+        (status = 204, description = "Done"),
+        (status = 404, description = "No such item, or not this user's", body = ErrorResponse),
+    ),
+)]
 async fn set_read(
     State(state): State<Arc<AppState>>,
     Extension(user): User,
@@ -239,6 +317,15 @@ async fn set_read(
     )
 }
 
+/// Stars or unstars an item.
+#[utoipa::path(
+    put, path = "/items/{id}/starred", operation_id = "setStarred", tag = tag::ITEMS,
+    params(("id" = i64, Path, description = "The item's `id`")), request_body = Flag,
+    responses(
+        (status = 204, description = "Done"),
+        (status = 404, description = "No such item, or not this user's", body = ErrorResponse),
+    ),
+)]
 async fn set_starred(
     State(state): State<Arc<AppState>>,
     Extension(user): User,
@@ -252,6 +339,15 @@ async fn set_starred(
     )
 }
 
+/// Saves where the user stopped playing an episode. The last write wins.
+#[utoipa::path(
+    put, path = "/items/{id}/position", operation_id = "setPosition", tag = tag::PODCASTS,
+    params(("id" = i64, Path, description = "The item's `id`")), request_body = Position,
+    responses(
+        (status = 204, description = "Done"),
+        (status = 404, description = "No such item, or not this user's", body = ErrorResponse),
+    ),
+)]
 async fn set_position(
     State(state): State<Arc<AppState>>,
     Extension(user): User,
@@ -265,6 +361,11 @@ async fn set_position(
     )
 }
 
+/// The user's Up Next queue.
+#[utoipa::path(
+    get, path = "/queue", operation_id = "getQueue", tag = tag::PODCASTS,
+    responses((status = 200, body = Queue)),
+)]
 async fn queue(
     State(state): State<Arc<AppState>>,
     Extension(user): User,
@@ -273,6 +374,15 @@ async fn queue(
     Ok(Json(Queue { items }))
 }
 
+/// Replaces the Up Next queue with `ids`, in order.
+#[utoipa::path(
+    put, path = "/queue", operation_id = "setQueue", tag = tag::PODCASTS,
+    request_body = QueueOrder,
+    responses(
+        (status = 200, description = "The new queue", body = Queue),
+        (status = 400, description = "More than 500 episodes", body = ErrorResponse),
+    ),
+)]
 async fn set_queue(
     State(state): State<Arc<AppState>>,
     Extension(user): User,
@@ -295,6 +405,17 @@ const MEDIA_FILE_KEPT: i64 = 30 * 86_400;
 /// The largest chapters or transcript file fetched.
 const MAX_MEDIA_FILE: usize = 5 * 1024 * 1024;
 
+/// The episode's chapters, read from its chapters file. Files are fetched
+/// once and kept for a week.
+#[utoipa::path(
+    get, path = "/items/{id}/chapters", operation_id = "getChapters", tag = tag::PODCASTS,
+    params(("id" = i64, Path, description = "The item's `id`")),
+    responses(
+        (status = 200, body = Chapters),
+        (status = 404, description = "No such item, or it has no chapters", body = ErrorResponse),
+        (status = 502, description = "The chapters file couldn't be fetched or read", body = ErrorResponse),
+    ),
+)]
 async fn chapters(
     State(state): State<Arc<AppState>>,
     Extension(user): User,
@@ -308,6 +429,18 @@ async fn chapters(
     media_file(&state, url, media::chapters).await
 }
 
+/// The episode's best transcript (one in the show's language before a
+/// translation, then JSON, WebVTT, SRT, HTML and plain text), as timed
+/// segments. Files are fetched once and kept for a week.
+#[utoipa::path(
+    get, path = "/items/{id}/transcript", operation_id = "getTranscript", tag = tag::PODCASTS,
+    params(("id" = i64, Path, description = "The item's `id`")),
+    responses(
+        (status = 200, body = Transcript),
+        (status = 404, description = "No such item, or it has no transcript", body = ErrorResponse),
+        (status = 502, description = "The transcript couldn't be fetched or read", body = ErrorResponse),
+    ),
+)]
 async fn transcript(
     State(state): State<Arc<AppState>>,
     Extension(user): User,
@@ -384,6 +517,15 @@ pub fn found(changed: bool) -> ApiResult<StatusCode> {
     }
 }
 
+/// Marks every item in a feed read.
+#[utoipa::path(
+    post, path = "/feeds/{id}/read-all", operation_id = "markFeedRead", tag = tag::FEEDS,
+    params(("id" = String, Path, description = "The feed's `id`")),
+    responses(
+        (status = 200, description = "`updated` counts the items that were unread", body = Updated),
+        (status = 404, description = "No such feed, or not this user's", body = ErrorResponse),
+    ),
+)]
 async fn read_all(
     State(state): State<Arc<AppState>>,
     Extension(user): User,
@@ -396,7 +538,13 @@ async fn read_all(
     Ok(Json(Updated { updated }))
 }
 
-/// Marks what a list shows read, or from one item down.
+/// Marks read every item a list shows, however many pages it has, or with
+/// `from` only that item and the older ones after it.
+#[utoipa::path(
+    post, path = "/items/read-all", operation_id = "markItemsRead", tag = tag::ITEMS,
+    request_body = MarkRead,
+    responses((status = 200, description = "`updated` counts the items that were unread", body = Updated)),
+)]
 async fn mark_read(
     State(state): State<Arc<AppState>>,
     Extension(user): User,
@@ -408,6 +556,12 @@ async fn mark_read(
     Ok(Json(Updated { updated }))
 }
 
+/// Fetches every feed now, except those fetched within the last minute (ten
+/// minutes for a feed whose last fetch failed).
+#[utoipa::path(
+    post, path = "/refresh", operation_id = "refresh", tag = tag::FEEDS,
+    responses((status = 202, description = "Fetching has started")),
+)]
 async fn refresh(State(state): State<Arc<AppState>>) -> StatusCode {
     state.request_refresh().await;
     StatusCode::ACCEPTED
@@ -434,6 +588,17 @@ fn client_address(
     peer.map_or_else(|| "unknown".to_owned(), |p| p.ip().to_string())
 }
 
+/// Asks to pair a device. Show the `code` to the user, who approves it on
+/// another device or with `pressboxctl`, then poll with `poll_id`.
+#[utoipa::path(
+    post, path = "/pair", operation_id = "startPairing", tag = tag::PAIRING,
+    request_body = PairRequest,
+    responses(
+        (status = 201, body = PairStart),
+        (status = 400, description = "An invalid name", body = ErrorResponse),
+        (status = 429, description = "Too many pairings are waiting", body = ErrorResponse),
+    ),
+)]
 async fn pair_start(
     State(state): State<Arc<AppState>>,
     peer: Option<Extension<ConnectInfo<SocketAddr>>>,
@@ -458,20 +623,49 @@ async fn pair_start(
     }
 }
 
+/// Whether a pairing was approved. The token is given once.
+#[utoipa::path(
+    get, path = "/pair/{poll_id}", operation_id = "pollPairing", tag = tag::PAIRING,
+    params(("poll_id" = String, Path, description = "`poll_id` from starting the pairing")),
+    responses(
+        (status = 200, description = "Approved: the device's token", body = PairApproved),
+        (status = 202, description = "Still waiting", body = PairPending),
+        (status = 404, description = "Denied, expired, or already collected", body = ErrorResponse),
+    ),
+)]
 async fn pair_poll(State(state): State<Arc<AppState>>, Path(poll_id): Path<String>) -> Response {
     match state.pairings.poll(&poll_id, now()) {
         PollState::Pending => {
-            (StatusCode::ACCEPTED, Json(json!({ "status": "pending" }))).into_response()
+            let body = PairPending {
+                status: "pending".to_owned(),
+            };
+            (StatusCode::ACCEPTED, Json(body)).into_response()
         }
         PollState::Approved(approved) => Json(approved).into_response(),
         PollState::Gone => ApiError::NotFound.into_response(),
     }
 }
 
+/// Pairing requests waiting for approval.
+#[utoipa::path(
+    get, path = "/pairings", operation_id = "listPairings", tag = tag::PAIRING,
+    responses((status = 200, body = Vec<PendingPairing>)),
+)]
 pub async fn pairings(State(state): State<Arc<AppState>>) -> Json<Vec<PendingPairing>> {
     Json(state.pairings.list(now()))
 }
 
+/// Approves a pairing, for the approver's user or, for admins, another one.
+#[utoipa::path(
+    post, path = "/pairings/{code}/approve", operation_id = "approvePairing", tag = tag::PAIRING,
+    params(("code" = String, Path, description = "The code shown on the device, e.g. `K7-4QX`")), request_body = Option<ApproveRequest>,
+    responses(
+        (status = 200, body = Approved),
+        (status = 400, description = "No such user", body = ErrorResponse),
+        (status = 403, description = "Only admins can approve for other users", body = ErrorResponse),
+        (status = 404, description = "No such pairing code", body = ErrorResponse),
+    ),
+)]
 async fn approve(
     State(state): State<Arc<AppState>>,
     Extension(approver): User,
@@ -511,6 +705,15 @@ pub async fn approve_for(
     Ok(Json(approved))
 }
 
+/// Denies a pairing.
+#[utoipa::path(
+    delete, path = "/pairings/{code}", operation_id = "denyPairing", tag = tag::PAIRING,
+    params(("code" = String, Path, description = "The code shown on the device, e.g. `K7-4QX`")),
+    responses(
+        (status = 204, description = "Denied"),
+        (status = 404, description = "No such pairing code", body = ErrorResponse),
+    ),
+)]
 pub async fn deny(
     State(state): State<Arc<AppState>>,
     Path(code): Path<String>,
@@ -520,9 +723,8 @@ pub async fn deny(
 
 #[cfg(test)]
 mod tests {
-    use axum::body::Body;
+    use axum::{body::Body, routing::get};
     use http_body_util::BodyExt;
-    use pressbox_api::PairApproved;
     use tower::ServiceExt;
 
     use super::*;

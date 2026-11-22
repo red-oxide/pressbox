@@ -15,4 +15,10 @@ version.workspace      = true
 workspace = true
 
 [dependencies]
-serde = { version = "1.0.229", features = ["derive"] }
+serde  = { version = "1.0.229", features = ["derive"] }
+utoipa = { version = "6.0.0", optional = true }
+
+[features]
+# OpenAPI schemas for these types (utoipa's `ToSchema`), for pressboxd's
+# generated API description; the clients don't need them.
+openapi = ["dep:utoipa"]
