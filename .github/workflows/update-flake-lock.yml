@@ -14,6 +14,6 @@ permissions:
 
 jobs:
   update-flake-lock:
-    uses: chrisppy/github-workflows/.github/workflows/update-flake-lock.yml@master
+    uses: red-oxide/github-workflows/.github/workflows/update-flake-lock.yml@master
     permissions:
       contents: write
