@@ -52,10 +52,10 @@ the dev shell.
   here and the Birdland bar all depend on `/api/v1`. Additive changes are fine;
   anything incompatible needs a new API version and a discussion first.
 - **OpenAPI.** `docs/openapi.json` is generated from the server's routes
-  (utoipa, `crates/pressboxd/src/openapi.rs`) and the `pressbox-api` types. Never
-  edit it by hand: change the code, annotate new routes and types for utoipa,
-  then run `just openapi` and commit the result. Update `docs/api.md` too when a
-  route is added or its behavior changes.
+  (utoipa, `crates/pressboxd/src/openapi.rs`) and the `pressbox-api` types.
+  Never edit it by hand: change the code, annotate new routes and types for
+  utoipa, then run `just openapi` and commit the result. Update `docs/api.md`
+  too when a route is added or its behavior changes.
 - **Database schema.** Change it only by appending a migration to the list in
   `crates/pressboxd/src/db.rs`. Never edit an existing migration.
 - **Module options.** If you add or change an option in `modules/`, update
@@ -63,6 +63,6 @@ the dev shell.
 - **Dependencies.** Don't add crates or run `nix flake update` / `cargo update`
   unless asked. A new crate must pass `just deny`; don't loosen `deny.toml` to
   make it pass.
-- **Changelog.** Record user-visible changes in `CHANGELOG.md` (Keep a Changelog,
-  CalVer `YY.MINOR.PATCH`). Leave version bumps, tags and `just release` to the
-  maintainer.
+- **Changelog.** Record user-visible changes in `CHANGELOG.md` (Keep a
+  Changelog, CalVer `YY.MINOR.PATCH`). Leave version bumps, tags and
+  `just release` to the maintainer.
