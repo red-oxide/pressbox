@@ -13,26 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  flake-check:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31
-
-      # Pulls from the red-oxide cache, and pushes what this run built (the
-      # checks include pressboxd, pressbox and pressbox-iced) so users and
-      # later runs can substitute them. Only master pushes, keeping
-      # pull-request builds out of the public cache.
-      - name: Set up Cachix
-        uses: cachix/cachix-action@v16
-        with:
-          name: red-oxide
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          skipPush: ${{ github.event_name == 'pull_request' }}
-
-      - name: Run flake checks
-        run: nix flake check --print-build-logs
+  check:
+    uses: red-oxide/github-workflows/.github/workflows/check.yml@master
+    with:
+      cachix: red-oxide
+    secrets: inherit
