@@ -238,5 +238,5 @@ The first release.
   tags and pushes `vX.Y.Z`, and publishes the GitHub release with the entry as
   its notes.
 
-[Unreleased]: https://github.com/red-oxide/pressbox/compare/v26.0.0...HEAD
 [26.0.0]: https://github.com/red-oxide/pressbox/releases/tag/v26.0.0
+[unreleased]: https://github.com/red-oxide/pressbox/compare/v26.0.0...HEAD
