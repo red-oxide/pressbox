@@ -13,15 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  flake-check:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31
-
-      - name: Run flake checks
-        run: nix flake check --print-build-logs
+  check:
+    uses: red-oxide/github-workflows/.github/workflows/check.yml@master
+    with:
+      cachix: red-oxide
+    secrets: inherit
