@@ -24,6 +24,10 @@ test:
 lint:
     {{ cargo }} clippy --workspace --all-targets -- -D warnings
 
+# Rewrite docs/openapi.json from the API (a test fails when it is out of date)
+openapi:
+    UPDATE_OPENAPI=1 {{ cargo }} test -q -p pressboxd openapi::tests::the_checked_in_description_is_current
+
 # Line coverage per file, from LLVM's instrumentation (no extra toolchain
 # component); fails below 95%, as the flake's coverage check does. Built in
 # target/tarpaulin so normal builds stay cached; `just coverage --out Html`

@@ -1,0 +1,1991 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "pressbox",
+    "description": "The HTTP API of pressboxd, the pressbox server. A token belongs to one user, and every answer is about that user's feeds and state. Timestamps are Unix seconds (UTC). Responses are compressed (gzip or brotli) when the request's `Accept-Encoding` allows it. Breaking changes will go to a new version (`/api/v2/`), served alongside `v1` for a while. See docs/api.md for more.",
+    "license": {
+      "name": "AGPL-3.0-only",
+      "identifier": "AGPL-3.0-only"
+    },
+    "version": "1"
+  },
+  "paths": {
+    "/api/v1/feeds": {
+      "get": {
+        "tags": [
+          "feeds"
+        ],
+        "summary": "The user's feeds.",
+        "operationId": "listFeeds",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Feed"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ]
+      }
+    },
+    "/api/v1/feeds/{id}/read-all": {
+      "post": {
+        "tags": [
+          "feeds"
+        ],
+        "summary": "Marks every item in a feed read.",
+        "operationId": "markFeedRead",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The feed's `id`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`updated` counts the items that were unread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Updated"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such feed, or not this user's",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ]
+      }
+    },
+    "/api/v1/items": {
+      "get": {
+        "tags": [
+          "items"
+        ],
+        "summary": "A page of items, newest first. To get the next page, pass the previous\npage's `next_cursor` as `cursor` with the same filters.",
+        "operationId": "listItems",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Full-text search over titles and text. Words are matched as prefixes\nand all must appear.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "feed",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unread",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "starred",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "media",
+            "in": "query",
+            "description": "`true`: only items with media; `false`: only items without.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "in_progress",
+            "in": "query",
+            "description": "`true`: only unread items with a saved playback position, i.e.\nstarted and not finished.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Skips this many items. Slow deep into a long list; prefer `cursor`.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Starts after the item a previous page's `next_cursor` names. Opaque;\ntakes precedence over `offset`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A malformed cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ]
+      }
+    },
+    "/api/v1/items/read-all": {
+      "post": {
+        "tags": [
+          "items"
+        ],
+        "summary": "Marks read every item a list shows, however many pages it has, or with\n`from` only that item and the older ones after it.",
+        "operationId": "markItemsRead",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkRead"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "`updated` counts the items that were unread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Updated"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ]
+      }
+    },
+    "/api/v1/items/{id}": {
+      "get": {
+        "tags": [
+          "items"
+        ],
+        "summary": "One item, with its full `content`.",
+        "operationId": "getItem",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The item's `id`",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Item"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such item, or not this user's",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ]
+      }
+    },
+    "/api/v1/items/{id}/chapters": {
+      "get": {
+        "tags": [
+          "podcasts"
+        ],
+        "summary": "The episode's chapters, read from its chapters file. Files are fetched\nonce and kept for a week.",
+        "operationId": "getChapters",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The item's `id`",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Chapters"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such item, or it has no chapters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The chapters file couldn't be fetched or read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ]
+      }
+    },
+    "/api/v1/items/{id}/position": {
+      "put": {
+        "tags": [
+          "podcasts"
+        ],
+        "summary": "Saves where the user stopped playing an episode. The last write wins.",
+        "operationId": "setPosition",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The item's `id`",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Position"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Done"
+          },
+          "401": {
+            "description": "A missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such item, or not this user's",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ]
+      }
+    },
+    "/api/v1/items/{id}/read": {
+      "put": {
+        "tags": [
+          "items"
+        ],
+        "summary": "Marks an item read or unread. Marking it read takes it out of Up Next.",
+        "operationId": "setRead",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The item's `id`",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Flag"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Done"
+          },
+          "401": {
+            "description": "A missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such item, or not this user's",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ]
+      }
+    },
+    "/api/v1/items/{id}/starred": {
+      "put": {
+        "tags": [
+          "items"
+        ],
+        "summary": "Stars or unstars an item.",
+        "operationId": "setStarred",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The item's `id`",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Flag"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Done"
+          },
+          "401": {
+            "description": "A missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such item, or not this user's",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ]
+      }
+    },
+    "/api/v1/items/{id}/transcript": {
+      "get": {
+        "tags": [
+          "podcasts"
+        ],
+        "summary": "The episode's best transcript (one in the show's language before a\ntranslation, then JSON, WebVTT, SRT, HTML and plain text), as timed\nsegments. Files are fetched once and kept for a week.",
+        "operationId": "getTranscript",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The item's `id`",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transcript"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such item, or it has no transcript",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The transcript couldn't be fetched or read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "tags": [
+          "server"
+        ],
+        "summary": "Who this token belongs to.",
+        "operationId": "getMe",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ]
+      }
+    },
+    "/api/v1/openapi.json": {
+      "get": {
+        "tags": [
+          "server"
+        ],
+        "summary": "This document, the API's OpenAPI description.",
+        "operationId": "getOpenApi",
+        "responses": {
+          "200": {
+            "description": "The OpenAPI description",
+            "content": {
+              "application/json": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pair": {
+      "post": {
+        "tags": [
+          "pairing"
+        ],
+        "summary": "Asks to pair a device. Show the `code` to the user, who approves it on\nanother device or with `pressboxctl`, then poll with `poll_id`.",
+        "operationId": "startPairing",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PairRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairStart"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "An invalid name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many pairings are waiting",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pair/{poll_id}": {
+      "get": {
+        "tags": [
+          "pairing"
+        ],
+        "summary": "Whether a pairing was approved. The token is given once.",
+        "operationId": "pollPairing",
+        "parameters": [
+          {
+            "name": "poll_id",
+            "in": "path",
+            "description": "`poll_id` from starting the pairing",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Approved: the device's token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairApproved"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Still waiting",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairPending"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Denied, expired, or already collected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pairings": {
+      "get": {
+        "tags": [
+          "pairing"
+        ],
+        "summary": "Pairing requests waiting for approval.",
+        "operationId": "listPairings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PendingPairing"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pairings/{code}": {
+      "delete": {
+        "tags": [
+          "pairing"
+        ],
+        "summary": "Denies a pairing.",
+        "operationId": "denyPairing",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "The code shown on the device, e.g. `K7-4QX`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Denied"
+          },
+          "401": {
+            "description": "A missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such pairing code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pairings/{code}/approve": {
+      "post": {
+        "tags": [
+          "pairing"
+        ],
+        "summary": "Approves a pairing, for the approver's user or, for admins, another one.",
+        "operationId": "approvePairing",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "The code shown on the device, e.g. `K7-4QX`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/ApproveRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approved"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No such user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only admins can approve for other users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such pairing code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ]
+      }
+    },
+    "/api/v1/queue": {
+      "get": {
+        "tags": [
+          "podcasts"
+        ],
+        "summary": "The user's Up Next queue.",
+        "operationId": "getQueue",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Queue"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "podcasts"
+        ],
+        "summary": "Replaces the Up Next queue with `ids`, in order.",
+        "operationId": "setQueue",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueueOrder"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The new queue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Queue"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "More than 500 episodes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ]
+      }
+    },
+    "/api/v1/refresh": {
+      "post": {
+        "tags": [
+          "feeds"
+        ],
+        "summary": "Fetches every feed now, except those fetched within the last minute (ten\nminutes for a feed whose last fetch failed).",
+        "operationId": "refresh",
+        "responses": {
+          "202": {
+            "description": "Fetching has started"
+          },
+          "401": {
+            "description": "A missing or unknown token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "token": []
+          }
+        ]
+      }
+    },
+    "/api/v1/version": {
+      "get": {
+        "tags": [
+          "server"
+        ],
+        "summary": "What the server is. Public, so a client can check what it talks to\nbefore pairing.",
+        "operationId": "getVersion",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Version"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "server"
+        ],
+        "summary": "For load balancers and service managers.",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "The server is up",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "ok"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApproveRequest": {
+        "type": "object",
+        "description": "Optional body for approving a pairing. Only admins may name another\nuser; by default the device goes to the approver's user.",
+        "properties": {
+          "user": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Approved": {
+        "type": "object",
+        "description": "Response to approving a pairing.",
+        "required": [
+          "name",
+          "user"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The device's name."
+          },
+          "user": {
+            "type": "string",
+            "description": "The user it was added to."
+          }
+        }
+      },
+      "Chapter": {
+        "type": "object",
+        "required": [
+          "start"
+        ],
+        "properties": {
+          "end": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Only changes the artwork: leave it out of a chapter list."
+          },
+          "image": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Artwork to show during the chapter."
+          },
+          "start": {
+            "type": "number",
+            "format": "double",
+            "description": "Seconds from the start."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A web page about the chapter."
+          }
+        }
+      },
+      "Chapters": {
+        "type": "object",
+        "description": "Response to `GET /api/v1/items/{id}/chapters`, from the episode's\nPodcasting 2.0 chapters file.",
+        "required": [
+          "chapters"
+        ],
+        "properties": {
+          "chapters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Chapter"
+            },
+            "description": "In order of `start`."
+          }
+        }
+      },
+      "Enclosure": {
+        "type": "object",
+        "description": "One media file.",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "bitrate": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Bits per second, if the feed says.",
+            "minimum": 0
+          },
+          "height": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Video height in pixels, if the feed says.",
+            "minimum": 0
+          },
+          "length": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Size in bytes, if the feed says.",
+            "minimum": 0
+          },
+          "mime": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "e.g. `audio/mpeg`, `video/mp4`, `application/x-mpegURL` (HLS)."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A label for choosing between enclosures, e.g. `\"1080p\"`."
+          },
+          "url": {
+            "type": "string",
+            "description": "An `http(s)` URL."
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "The body of every error response (4xx and 5xx), e.g.\n`{\"error\": \"not found\"}`.",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "What went wrong, in English, for showing to the user."
+          }
+        }
+      },
+      "Feed": {
+        "type": "object",
+        "description": "A feed declared in the server configuration, with its current state.",
+        "required": [
+          "id",
+          "title",
+          "url",
+          "tags",
+          "unread",
+          "total"
+        ],
+        "properties": {
+          "archived": {
+            "type": "boolean",
+            "description": "The feed was removed from the configuration but is kept because it\nhas starred items. It is no longer fetched."
+          },
+          "episodes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many of `total` are podcast episodes (items with media), so\nclients can tell podcasts from news. Absent from servers before\n26.0.",
+            "minimum": 0
+          },
+          "id": {
+            "type": "string",
+            "description": "The attribute name used in the Nix configuration, e.g. `\"lwn\"`."
+          },
+          "image": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The feed's artwork (`itunes:image`, the RSS `<image>`, Atom's logo)."
+          },
+          "last_error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The error from the last fetch, if it failed."
+          },
+          "last_fetched": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "When the feed was last fetched, successfully or not."
+          },
+          "medium": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`podcast:medium`: `podcast`, `music`, `video`, `audiobook`, ..."
+          },
+          "site_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The website the feed belongs to, if it says."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "title": {
+            "type": "string",
+            "description": "The configured title, or the title the feed reports about itself."
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "unread": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "unread_episodes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many of `unread` are episodes.",
+            "minimum": 0
+          },
+          "url": {
+            "type": "string",
+            "description": "The URL that is polled."
+          }
+        }
+      },
+      "Flag": {
+        "type": "object",
+        "description": "Body for `PUT /api/v1/items/{id}/read` and `PUT /api/v1/items/{id}/starred`.",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Item": {
+        "type": "object",
+        "description": "One entry from a feed.",
+        "required": [
+          "id",
+          "feed_id",
+          "title",
+          "published",
+          "read",
+          "starred"
+        ],
+        "properties": {
+          "author": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Full HTML content, if the feed provides it. Only included by\n`GET /api/v1/items/{id}`; list responses leave it out."
+          },
+          "feed_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "media": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Media",
+                "description": "Audio or video attached to the item (a podcast episode), if any."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Where this user stopped playing the media, in seconds; 0 if they\nhaven't started it (or finished it).",
+            "minimum": 0
+          },
+          "published": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Publication time, or the time pressbox first saw the item."
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "starred": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Short HTML summary, if the feed provides one."
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ItemPage": {
+        "type": "object",
+        "description": "A page of items, newest first.",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Item"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass as `cursor` to get the next page; `None` on the last page."
+          },
+          "next_offset": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Pass as `offset` to get the next page; `None` on the last page, and\nwhen paging by `cursor`. Kept for older clients; prefer `next_cursor`.",
+            "minimum": 0
+          }
+        }
+      },
+      "ItemQuery": {
+        "type": "object",
+        "description": "Query parameters for `GET /api/v1/items`.",
+        "properties": {
+          "cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Starts after the item a previous page's `next_cursor` names. Opaque;\ntakes precedence over `offset`."
+          },
+          "feed": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "in_progress": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "`true`: only unread items with a saved playback position, i.e.\nstarted and not finished."
+          },
+          "limit": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          },
+          "media": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "`true`: only items with media; `false`: only items without."
+          },
+          "offset": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Skips this many items. Slow deep into a long list; prefer `cursor`.",
+            "minimum": 0
+          },
+          "q": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Full-text search over titles and text. Words are matched as prefixes\nand all must appear."
+          },
+          "starred": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "tag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unread": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        }
+      },
+      "MarkRead": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ItemQuery",
+            "description": "The list's filters, as for `GET /api/v1/items`. `limit`, `offset`\nand `cursor` are ignored."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "description": "Only this item and the ones after it in the list (older ones), if\nset. Nothing is marked if the user can't see this item."
+              }
+            }
+          }
+        ],
+        "description": "Body of `POST /api/v1/items/read-all`: marks the items a list shows as\nread, in one request however many pages the list has."
+      },
+      "Me": {
+        "type": "object",
+        "description": "Response to `GET /api/v1/me`: who this token belongs to.",
+        "required": [
+          "user",
+          "admin"
+        ],
+        "properties": {
+          "admin": {
+            "type": "boolean"
+          },
+          "device": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The device's name, or `None` for the static token."
+          },
+          "user": {
+            "type": "string"
+          }
+        }
+      },
+      "Media": {
+        "type": "object",
+        "description": "An item's audio or video, from RSS `<enclosure>`, Atom `rel=\"enclosure\"`\nlinks and JSON Feed attachments, with the iTunes and Podcasting 2.0\n(`podcast:`) tags that describe it.",
+        "required": [
+          "enclosures"
+        ],
+        "properties": {
+          "chapters": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The `podcast:chapters` file. Clients use `GET\n/api/v1/items/{id}/chapters`, which reads it for them."
+          },
+          "duration": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Length in seconds, if the feed says.",
+            "minimum": 0
+          },
+          "enclosures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Enclosure"
+            },
+            "description": "The files: the feed's own enclosure first, then any\n`podcast:alternateEnclosure`s (other formats, bitrates or video) in\nthe order the feed lists them. Never empty."
+          },
+          "episode": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          },
+          "image": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The episode's artwork, if it has its own."
+          },
+          "season": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          },
+          "transcripts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TranscriptFile"
+            },
+            "description": "The `podcast:transcript` files. Clients use `GET\n/api/v1/items/{id}/transcript`, which reads the best one for them."
+          }
+        }
+      },
+      "PairApproved": {
+        "type": "object",
+        "description": "Response to `GET /api/v1/pair/{poll_id}` once approved. Returned only once.",
+        "required": [
+          "token",
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name it was registered under (made unique if needed)."
+          },
+          "token": {
+            "type": "string",
+            "description": "The device's API token."
+          }
+        }
+      },
+      "PairPending": {
+        "type": "object",
+        "description": "Response to `GET /api/v1/pair/{poll_id}` (202) while the request waits\nfor approval.",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Always `\"pending\"`."
+          }
+        }
+      },
+      "PairRequest": {
+        "type": "object",
+        "description": "Body for `POST /api/v1/pair`: a client asking to be paired.",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "A name for the device, e.g. `\"laptop\"`. Shown when approving."
+          }
+        }
+      },
+      "PairStart": {
+        "type": "object",
+        "description": "Response to `POST /api/v1/pair`.",
+        "required": [
+          "code",
+          "poll_id",
+          "expires_in"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Short code to approve, e.g. `\"K7-4QX\"`. Show it to the user."
+          },
+          "expires_in": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Seconds until the request expires.",
+            "minimum": 0
+          },
+          "poll_id": {
+            "type": "string",
+            "description": "Secret to poll `GET /api/v1/pair/{poll_id}` with. Keep it private."
+          }
+        }
+      },
+      "PendingPairing": {
+        "type": "object",
+        "description": "A pairing request waiting for approval.",
+        "required": [
+          "code",
+          "name",
+          "requested"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "requested": {
+            "type": "integer",
+            "format": "int64",
+            "description": "When it was requested (Unix seconds)."
+          }
+        }
+      },
+      "Position": {
+        "type": "object",
+        "description": "Body for `PUT /api/v1/items/{id}/position`.",
+        "required": [
+          "position"
+        ],
+        "properties": {
+          "position": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Seconds into the media. 0 forgets the position (when the media was\nfinished, say).",
+            "minimum": 0
+          }
+        }
+      },
+      "Queue": {
+        "type": "object",
+        "description": "Response to `GET` and `PUT /api/v1/queue`: the user's Up Next list, the\nepisodes to play next in order. Items come as in lists, without `content`.",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Item"
+            }
+          }
+        }
+      },
+      "QueueOrder": {
+        "type": "object",
+        "description": "Body for `PUT /api/v1/queue`: the whole list in order, replacing the one\nbefore. Clients add, remove and reorder by sending the list they want.\nItems the user can't see, items without media, and repeats are left out.",
+        "required": [
+          "ids"
+        ],
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
+      "Segment": {
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "text"
+        ],
+        "properties": {
+          "end": {
+            "type": "number",
+            "format": "double"
+          },
+          "speaker": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start": {
+            "type": "number",
+            "format": "double",
+            "description": "Seconds from the start; 0 for untimed (HTML or plain) transcripts."
+          },
+          "text": {
+            "type": "string",
+            "description": "Plain text."
+          }
+        }
+      },
+      "Transcript": {
+        "type": "object",
+        "description": "Response to `GET /api/v1/items/{id}/transcript`: the episode's best\ntranscript (JSON, WebVTT, SRT or HTML), as timed segments. Very short\ncues (some files time every word) are joined into sentences.",
+        "required": [
+          "segments"
+        ],
+        "properties": {
+          "segments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Segment"
+            }
+          }
+        }
+      },
+      "TranscriptFile": {
+        "type": "object",
+        "description": "A `podcast:transcript` file.",
+        "required": [
+          "url",
+          "mime"
+        ],
+        "properties": {
+          "lang": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mime": {
+            "type": "string",
+            "description": "e.g. `text/vtt`, `application/x-subrip`, `application/json`,\n`text/html`."
+          },
+          "rel": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`\"captions\"` for closed captions."
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "Updated": {
+        "type": "object",
+        "description": "Response for `POST /api/v1/feeds/{id}/read-all`.",
+        "required": [
+          "updated"
+        ],
+        "properties": {
+          "updated": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "Version": {
+        "type": "object",
+        "description": "`GET /api/v1/version`, which needs no token.",
+        "required": [
+          "version",
+          "api"
+        ],
+        "properties": {
+          "api": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The API version, as in `/api/v1`.",
+            "minimum": 0
+          },
+          "version": {
+            "type": "string",
+            "description": "pressboxd's version, e.g. `26.0.0`."
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "token": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "A paired device's token, or the static `tokenFile` token"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "feeds",
+      "description": "The user's feeds"
+    },
+    {
+      "name": "items",
+      "description": "Entries from the feeds, and their read and starred state"
+    },
+    {
+      "name": "podcasts",
+      "description": "Playback positions, Up Next, chapters and transcripts"
+    },
+    {
+      "name": "pairing",
+      "description": "How a device gets a token, and approving others"
+    },
+    {
+      "name": "server",
+      "description": "About the server and the token"
+    }
+  ]
+}

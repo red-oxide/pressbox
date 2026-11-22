@@ -19,6 +19,7 @@ mod config;
 mod db;
 mod fetch;
 mod media;
+mod openapi;
 mod pairing;
 mod sanitize;
 mod systemd;

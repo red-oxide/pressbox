@@ -18,6 +18,20 @@ change. The Apple and Android apps,
 [pressbox-android](https://github.com/red-oxide/pressbox-android), have their
 own releases.
 
+## [Unreleased]
+
+### Server
+
+- An OpenAPI 3.1 description of the HTTP API, built from the routes and the
+  `pressbox-api` types, served at `GET /api/v1/openapi.json` (no token needed)
+  and checked in as `docs/openapi.json`, so the Swift and Kotlin clients can be
+  generated or tested against it. A test fails when the checked-in copy falls
+  behind the API; `just openapi` rewrites it.
+
+- Error responses and the pending answer from `GET /api/v1/pair/{poll_id}` have
+  types in `pressbox-api` (`ErrorResponse`, `PairPending`). Their JSON is
+  unchanged.
+
 ## [26.0.0] - 2026-11-17
 
 The first release.
@@ -224,4 +238,5 @@ The first release.
   tags and pushes `vX.Y.Z`, and publishes the GitHub release with the entry as
   its notes.
 
+[Unreleased]: https://github.com/red-oxide/pressbox/compare/v26.0.0...HEAD
 [26.0.0]: https://github.com/red-oxide/pressbox/releases/tag/v26.0.0
