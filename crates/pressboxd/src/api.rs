@@ -13,9 +13,13 @@
 //! `Authorization: Bearer <token>`, where the token
 //! is a paired device's token or the static `token_file` token. A token
 //! belongs to one user, and every answer is about that user's feeds and
-//! state. Admins may approve a pairing for another user.
+//! state. Admins may approve a pairing for another user, and only admins
+//! may deny one. `DELETE /api/v1/me` revokes the token it is sent with.
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    net::{IpAddr, Ipv6Addr, SocketAddr},
+    sync::Arc,
+};
 
 use axum::{
     Extension, Json, Router,
@@ -58,10 +62,10 @@ pub fn authenticated_routes() -> ApiRouter {
         .routes(routes!(transcript))
         .routes(routes!(queue, set_queue))
         .routes(routes!(refresh))
-        .routes(routes!(me))
+        .routes(routes!(me, unpair))
         .routes(routes!(pairings))
         .routes(routes!(approve))
-        .routes(routes!(deny))
+        .routes(routes!(deny_as))
 }
 
 /// The `/api/v1` routes anyone may call. Pairing is how a client gets a
@@ -240,6 +244,32 @@ async fn me(Extension(user): User) -> Json<Me> {
     })
 }
 
+/// Revokes the device whose token made the request, as when a client
+/// signs out. The static token isn't a device: it is removed from the
+/// configuration instead.
+#[utoipa::path(
+    delete, path = "/me", operation_id = "unpair", tag = tag::SERVER,
+    responses(
+        (status = 204, description = "This device's token is revoked"),
+        (status = 400, description = "The static token is not a device", body = ErrorResponse),
+        (status = 404, description = "The device was already removed", body = ErrorResponse),
+    ),
+)]
+async fn unpair(
+    State(state): State<Arc<AppState>>,
+    Extension(user): User,
+) -> ApiResult<StatusCode> {
+    let device = user.device.ok_or(ApiError::BadRequest(
+        "the static token is not a device; remove it from the configuration",
+    ))?;
+    let name = device.clone();
+    let removed = state.write(move |db| db.remove_device(&name)).await?;
+    if removed {
+        tracing::info!("device {device:?} of {} signed out", user.name);
+    }
+    found(removed)
+}
+
 /// The user's feeds.
 #[utoipa::path(
     get, path = "/feeds", operation_id = "listFeeds", tag = tag::FEEDS,
@@ -259,7 +289,7 @@ async fn feeds(
     params(ItemQuery),
     responses(
         (status = 200, body = ItemPage),
-        (status = 400, description = "A malformed cursor", body = ErrorResponse),
+        (status = 400, description = "A malformed cursor, or a search over 16 words or 500 characters", body = ErrorResponse),
     ),
 )]
 async fn items(
@@ -267,10 +297,29 @@ async fn items(
     Extension(user): User,
     Query(query): Query<ItemQuery>,
 ) -> ApiResult<Json<ItemPage>> {
+    check_search(&query)?;
     match state.read(move |db| db.items(user.id, &query)).await {
         Ok(page) => Ok(Json(page)),
         Err(e) if e.is::<BadCursor>() => Err(ApiError::BadRequest("invalid cursor")),
         Err(e) => Err(e.into()),
+    }
+}
+
+/// Most words a search may have; each is a prefix match, and a long
+/// enough search is costly to run.
+const MAX_SEARCH_WORDS: usize = 16;
+/// Longest search, in bytes.
+const MAX_SEARCH_LEN: usize = 500;
+
+fn check_search(query: &ItemQuery) -> ApiResult<()> {
+    match query.q.as_deref() {
+        Some(q) if q.len() > MAX_SEARCH_LEN => {
+            Err(ApiError::BadRequest("a search is at most 500 characters"))
+        }
+        Some(q) if q.split_whitespace().count() > MAX_SEARCH_WORDS => {
+            Err(ApiError::BadRequest("a search is at most 16 words"))
+        }
+        _ => Ok(()),
     }
 }
 
@@ -404,6 +453,9 @@ const MEDIA_FILE_FRESH: i64 = 7 * 86_400;
 const MEDIA_FILE_KEPT: i64 = 30 * 86_400;
 /// The largest chapters or transcript file fetched.
 const MAX_MEDIA_FILE: usize = 5 * 1024 * 1024;
+/// How long a chapters or transcript file that couldn't be fetched or read
+/// is not tried again, however often it is asked for.
+const MEDIA_FILE_RETRY: i64 = 15 * 60;
 
 /// The episode's chapters, read from its chapters file. Files are fetched
 /// once and kept for a week.
@@ -482,19 +534,39 @@ async fn media_file<T: serde::Serialize>(
     if let Some(json) = kept {
         return Ok(json_response(json));
     }
-    let body = fetch::download(&state.links, &url, MAX_MEDIA_FILE)
-        .await
-        .map_err(|e| {
+    // A file that just failed fails again for a while without being
+    // fetched, so asking over and over can't have pressboxd hammer a
+    // server a feed points at.
+    let failures = || {
+        let mut failures = state
+            .media_failures
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let now = now();
+        failures.retain(|_, at| now - *at < MEDIA_FILE_RETRY);
+        failures
+    };
+    if failures().contains_key(&url) {
+        return Err(ApiError::BadGateway("could not fetch the file"));
+    }
+    let failed = |error| {
+        failures().insert(url.clone(), now());
+        ApiError::BadGateway(error)
+    };
+    let body = match fetch::download(&state.links, &url, MAX_MEDIA_FILE).await {
+        Ok(body) => body,
+        Err(e) => {
             tracing::warn!(url, "fetching media file: {e}");
-            ApiError::BadGateway("could not fetch the file")
-        })?;
+            return Err(failed("could not fetch the file"));
+        }
+    };
     let key = url.clone();
     let json = tokio::task::spawn_blocking(move || {
         parse(&body, &key).map(|t| serde_json::to_string(&t).unwrap_or_default())
     })
     .await
     .map_err(anyhow::Error::from)?
-    .ok_or(ApiError::BadGateway("could not read the file"))?;
+    .ok_or_else(|| failed("could not read the file"))?;
     let stored = json.clone();
     if let Err(e) = state
         .write(move |db| {
@@ -543,13 +615,17 @@ async fn read_all(
 #[utoipa::path(
     post, path = "/items/read-all", operation_id = "markItemsRead", tag = tag::ITEMS,
     request_body = MarkRead,
-    responses((status = 200, description = "`updated` counts the items that were unread", body = Updated)),
+    responses(
+        (status = 200, description = "`updated` counts the items that were unread", body = Updated),
+        (status = 400, description = "A search over 16 words or 500 characters", body = ErrorResponse),
+    ),
 )]
 async fn mark_read(
     State(state): State<Arc<AppState>>,
     Extension(user): User,
     Json(req): Json<MarkRead>,
 ) -> ApiResult<Json<Updated>> {
+    check_search(&req.query)?;
     let updated = state
         .write(move |db| db.mark_read(user.id, &req.query, req.from))
         .await?;
@@ -567,9 +643,10 @@ async fn refresh(State(state): State<Arc<AppState>>) -> StatusCode {
     StatusCode::ACCEPTED
 }
 
-/// The address a request came from: the peer's, or, behind a trusted
-/// reverse proxy, the last address in `X-Forwarded-For` (the one the proxy
-/// itself added; earlier entries could be forged by the client).
+/// Who a request came from, for the per-client pairing limit: the peer's
+/// address, or, behind a trusted reverse proxy, the last address in
+/// `X-Forwarded-For` (the one the proxy itself added; earlier entries could
+/// be forged by the client). See [`client_key`] for how IPv6 is counted.
 fn client_address(
     state: &AppState,
     headers: &axum::http::HeaderMap,
@@ -583,9 +660,29 @@ fn client_address(
             .map(str::trim)
             .filter(|v| !v.is_empty())
     {
-        return forwarded.to_owned();
+        return forwarded
+            .parse()
+            .map_or_else(|_| forwarded.to_owned(), client_key);
     }
-    peer.map_or_else(|| "unknown".to_owned(), |p| p.ip().to_string())
+    peer.map_or_else(|| "unknown".to_owned(), |p| client_key(p.ip()))
+}
+
+/// An address as one client. An IPv6 host is normally given a whole /64,
+/// so counting single IPv6 addresses would let one machine take every
+/// pending pairing; a /64 counts as one client. IPv4 addresses, written
+/// either way, count one by one.
+fn client_key(ip: IpAddr) -> String {
+    match ip {
+        IpAddr::V4(v4) => v4.to_string(),
+        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+            Some(v4) => v4.to_string(),
+            None => {
+                let s = v6.segments();
+                let prefix = Ipv6Addr::new(s[0], s[1], s[2], s[3], 0, 0, 0, 0);
+                format!("{prefix}/64")
+            }
+        },
+    }
 }
 
 /// Asks to pair a device. Show the `code` to the user, who approves it on
@@ -705,15 +802,30 @@ pub async fn approve_for(
     Ok(Json(approved))
 }
 
-/// Denies a pairing.
+/// Denies a pairing. Only admins may, so one user can't turn away another's
+/// new devices.
 #[utoipa::path(
     delete, path = "/pairings/{code}", operation_id = "denyPairing", tag = tag::PAIRING,
     params(("code" = String, Path, description = "The code shown on the device, e.g. `K7-4QX`")),
     responses(
         (status = 204, description = "Denied"),
+        (status = 403, description = "Only admins can deny pairings", body = ErrorResponse),
         (status = 404, description = "No such pairing code", body = ErrorResponse),
     ),
 )]
+async fn deny_as(
+    state: State<Arc<AppState>>,
+    Extension(user): User,
+    code: Path<String>,
+) -> ApiResult<StatusCode> {
+    if !user.admin {
+        return Err(ApiError::Forbidden("only admins can deny pairings"));
+    }
+    deny(state, code).await
+}
+
+/// Denies a pairing (shared with the control socket, which needs no admin
+/// check).
 pub async fn deny(
     State(state): State<Arc<AppState>>,
     Path(code): Path<String>,
@@ -919,6 +1031,48 @@ mod tests {
         assert_eq!(resp.headers()["content-encoding"], "br");
         let resp = get(None).await.unwrap();
         assert!(resp.headers().get("content-encoding").is_none());
+    }
+
+    #[tokio::test]
+    async fn searches_are_limited() {
+        let s = state();
+        let words = |n: usize| vec!["one"; n].join("+");
+        let (status, _) = call(
+            &s,
+            "GET",
+            &format!("/api/v1/items?q={}", words(16)),
+            None,
+            T,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let (status, body) = call(
+            &s,
+            "GET",
+            &format!("/api/v1/items?q={}", words(17)),
+            None,
+            T,
+        )
+        .await;
+        assert_eq!(
+            (status, body.as_str()),
+            (
+                StatusCode::BAD_REQUEST,
+                r#"{"error":"a search is at most 16 words"}"#
+            )
+        );
+        let long = "o".repeat(501);
+        let (status, body) = call(&s, "GET", &format!("/api/v1/items?q={long}"), None, T).await;
+        assert_eq!(
+            (status, body.as_str()),
+            (
+                StatusCode::BAD_REQUEST,
+                r#"{"error":"a search is at most 500 characters"}"#
+            )
+        );
+        let body = format!(r#"{{"q":"{}"}}"#, vec!["x"; 17].join(" "));
+        let (status, _) = call(&s, "POST", "/api/v1/items/read-all", Some(&body), T).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "marking read too");
     }
 
     #[tokio::test]
@@ -1241,6 +1395,113 @@ mod tests {
         assert_eq!(pair(&s, "2.2.2.2").await, StatusCode::TOO_MANY_REQUESTS);
     }
 
+    #[test]
+    fn an_ipv6_slash_64_is_one_client() {
+        let key = |s: &str| client_key(s.parse().unwrap());
+        assert_eq!(key("203.0.113.7"), "203.0.113.7");
+        assert_eq!(key("::ffff:203.0.113.7"), "203.0.113.7", "mapped IPv4");
+        assert_eq!(key("2001:db8:1:2:aaaa::1"), "2001:db8:1:2::/64");
+        assert_eq!(key("2001:db8:1:2:bbbb::9"), key("2001:db8:1:2::1"));
+        assert_ne!(key("2001:db8:1:3::1"), key("2001:db8:1:2::1"));
+    }
+
+    #[tokio::test]
+    async fn pairing_is_limited_per_ipv6_prefix() {
+        let pair = |s: &Arc<AppState>, ip: &str| {
+            let s = s.clone();
+            let peer: SocketAddr = format!("[{ip}]:5000").parse().unwrap();
+            async move {
+                let mut req = Request::post("/api/v1/pair")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"name":"d"}"#))
+                    .unwrap();
+                req.extensions_mut().insert(ConnectInfo(peer));
+                router(s).oneshot(req).await.unwrap().status()
+            }
+        };
+        let s = Arc::new(AppState::new(Db::open_in_memory().unwrap(), None, 500).unwrap());
+        for n in 0..crate::pairing::MAX_PER_CLIENT {
+            assert_eq!(
+                pair(&s, &format!("2001:db8:0:1::{n:x}")).await,
+                StatusCode::CREATED
+            );
+        }
+        assert_eq!(
+            pair(&s, "2001:db8:0:1:ffff::1").await,
+            StatusCode::TOO_MANY_REQUESTS,
+            "another address in the same /64"
+        );
+        assert_eq!(pair(&s, "2001:db8:0:2::1").await, StatusCode::CREATED);
+
+        // Behind a proxy, the forwarded address is grouped the same way;
+        // one that isn't an address still counts as itself.
+        let mut proxied = AppState::new(Db::open_in_memory().unwrap(), None, 500).unwrap();
+        proxied.behind_proxy = true;
+        let headers = |v: &'static str| {
+            let mut h = axum::http::HeaderMap::new();
+            h.insert("x-forwarded-for", v.parse().unwrap());
+            h
+        };
+        assert_eq!(
+            client_address(&proxied, &headers("9.9.9.9, 2001:db8::5"), None),
+            "2001:db8::/64"
+        );
+        assert_eq!(
+            client_address(&proxied, &headers("not-an-address"), None),
+            "not-an-address"
+        );
+        assert_eq!(
+            client_address(&proxied, &axum::http::HeaderMap::new(), None),
+            "unknown"
+        );
+    }
+
+    #[tokio::test]
+    async fn only_admins_deny_pairings() {
+        let (s, chris, anna) = household().await;
+        let (_, body) = call(&s, "POST", "/api/v1/pair", Some(r#"{"name":"x"}"#), None).await;
+        let p: PairStart = serde_json::from_str(&body).unwrap();
+        let uri = format!("/api/v1/pairings/{}", p.code);
+        let (status, body) = call(&s, "DELETE", &uri, None, Some(&anna)).await;
+        assert_eq!(
+            (status, body.as_str()),
+            (
+                StatusCode::FORBIDDEN,
+                r#"{"error":"only admins can deny pairings"}"#
+            )
+        );
+        assert_eq!(s.pairings.count(now()), 1, "still waiting");
+        let (status, _) = call(&s, "DELETE", &uri, None, Some(&chris)).await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        assert_eq!(s.pairings.count(now()), 0);
+    }
+
+    #[tokio::test]
+    async fn a_device_can_revoke_its_own_token() {
+        let (s, chris, anna) = household().await;
+        let (status, _) = call(&s, "DELETE", "/api/v1/me", None, Some(&anna)).await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        assert_eq!(
+            call(&s, "GET", "/api/v1/me", None, Some(&anna)).await.0,
+            StatusCode::UNAUTHORIZED,
+            "revoked"
+        );
+        assert_eq!(
+            call(&s, "GET", "/api/v1/me", None, Some(&chris)).await.0,
+            StatusCode::OK,
+            "other devices are untouched"
+        );
+
+        // The static token is not a device.
+        let s = state();
+        let (status, body) = call(&s, "DELETE", "/api/v1/me", None, T).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+        assert_eq!(
+            call(&s, "GET", "/api/v1/me", None, T).await.0,
+            StatusCode::OK
+        );
+    }
+
     #[tokio::test]
     async fn version_needs_no_token() {
         let s = Arc::new(AppState::new(Db::open_in_memory().unwrap(), None, 500).unwrap());
@@ -1489,6 +1750,43 @@ mod tests {
         );
         let (status, _) = call(&s, "GET", "/api/v1/items/1/transcript", None, T).await;
         assert_eq!(status, StatusCode::OK);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn failed_media_files_are_not_fetched_again_at_once() {
+        use std::sync::atomic::Ordering;
+        let (addr, hits) = file_server().await;
+        let s = podcast_state(addr);
+        // Item 3's chapters: a file that is there but isn't chapters.
+        s.db()
+            .break_with("UPDATE items SET media = replace(media, '/missing', '/bad.json')");
+        for _ in 0..3 {
+            let (status, _) = call(&s, "GET", "/api/v1/items/3/chapters", None, T).await;
+            assert_eq!(status, StatusCode::BAD_GATEWAY);
+        }
+        assert_eq!(hits.load(Ordering::SeqCst), 1, "tried once");
+
+        // Once the failure is old enough, it is tried again.
+        for at in s.media_failures.lock().unwrap().values_mut() {
+            *at -= MEDIA_FILE_RETRY;
+        }
+        call(&s, "GET", "/api/v1/items/3/chapters", None, T).await;
+        assert_eq!(hits.load(Ordering::SeqCst), 2);
+
+        // A file that can't be fetched at all is remembered too.
+        s.db()
+            .break_with("UPDATE items SET media = replace(media, '/bad.json', '/missing')");
+        for _ in 0..2 {
+            let (status, body) = call(&s, "GET", "/api/v1/items/3/chapters", None, T).await;
+            assert_eq!(
+                (status, body.as_str()),
+                (
+                    StatusCode::BAD_GATEWAY,
+                    r#"{"error":"could not fetch the file"}"#
+                )
+            );
+        }
+        assert_eq!(s.media_failures.lock().unwrap().len(), 2);
     }
 
     #[tokio::test]

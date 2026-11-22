@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     path::PathBuf,
     sync::{Arc, Mutex, MutexGuard},
     time::Duration,
@@ -68,6 +68,9 @@ pub struct AppState {
     backup_dir: PathBuf,
     /// Trust `X-Forwarded-For` from a reverse proxy for client addresses.
     behind_proxy: bool,
+    /// Chapters and transcript URLs that couldn't be fetched or read, and
+    /// when, so asking again doesn't fetch them again straight away.
+    media_failures: Mutex<HashMap<String, i64>>,
 }
 
 impl AppState {
@@ -87,6 +90,7 @@ impl AppState {
             article_slots: Semaphore::const_new(fetch::ARTICLE_TASKS),
             backup_dir: PathBuf::from("backups"),
             behind_proxy: false,
+            media_failures: Mutex::default(),
         })
     }
 

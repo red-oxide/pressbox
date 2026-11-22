@@ -156,8 +156,9 @@ in
       description = ''
         Let the URLs feeds supply (article pages for `fullText`, podcast
         chapters and transcripts) be fetched from this machine and private
-        networks too. By default only public addresses are, so a feed can't
-        make pressboxd send requests to your router or other local services.
+        networks too. By default only public addresses that aren't this
+        machine's own are, so a feed can't make pressboxd send requests to
+        your router or other local services.
         Turn it on if a feed on your own network links to pages or files
         there. The feeds themselves are fetched from wherever their `url`
         says either way.

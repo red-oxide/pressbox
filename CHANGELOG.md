@@ -32,6 +32,33 @@ own releases.
   types in `pressbox-api` (`ErrorResponse`, `PairPending`). Their JSON is
   unchanged.
 
+### Security
+
+- Pairing: the per-client limit on waiting requests counts an IPv6 /64 as one
+  client, as a single machine usually has a whole /64 and could otherwise take
+  every slot and keep anyone else from pairing.
+
+- Pairing: only admins can deny a waiting request, so one user can't turn away
+  another's new devices.
+
+- `DELETE /api/v1/me` revokes the token it is sent with, so a client can sign
+  itself out without `pressboxctl revoke`.
+
+- Article pages, chapters and transcripts are no longer fetched from the
+  server's own addresses (a public one included), nor from 6to4 addresses that
+  carry a private IPv4 address, Teredo, site-local or local-use NAT64 ones.
+
+- A chapters or transcript file that can't be fetched or read isn't fetched
+  again for 15 minutes, however often it is asked for.
+
+- Searches are limited to 16 words and 500 characters.
+
+- The control socket is bound in a private staging directory and moved into
+  place, so it never exists at its path with permissions looser than `0600`,
+  whatever the umask.
+
+- CI pins its GitHub Actions to commits, and Dependabot keeps the pins current.
+
 ## [26.0.0] - 2026-11-17
 
 The first release.

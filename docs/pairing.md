@@ -18,13 +18,16 @@ Every client gets its own token, and only its SHA-256 is stored. To pair:
 1. The client picks up its token on its own. Codes expire after ten minutes.
 
 `pressboxctl devices` lists devices with their user and when each was last seen;
-`pressboxctl revoke <name>` locks one out. For a client that cannot pair (a
-script, say), `pressboxctl add-device <name> --user <user>` prints a token.
-`pressbox whoami` shows which user and device a machine is signed in as, and the
-server's version.
+`pressboxctl revoke <name>` locks one out, and a client can sign itself out with
+`DELETE /api/v1/me`. For a client that cannot pair (a script, say),
+`pressboxctl add-device <name> --user <user>` prints a token. `pressbox whoami`
+shows which user and device a machine is signed in as, and the server's version.
 
-Anyone who can reach the server can ask to pair, so requests are limited: 3
-waiting per client address and 50 in all. Behind a reverse proxy or
+Anyone who can reach the server can ask to pair, and the device name in a
+request is whatever the requester typed, so approve by the code the new device
+shows, never by its name. Only admins can deny a request. Requests are limited:
+3 waiting per client and 50 in all, where a client is an IPv4 address or an IPv6
+/64 (the block a single machine is usually given). Behind a reverse proxy or
 `tailscale serve`, every request comes from the proxy; set `behindProxy = true`
 so the address the proxy puts in `X-Forwarded-For` counts instead. Leave it off
 otherwise, since clients could then send any address they like.

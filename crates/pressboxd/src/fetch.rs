@@ -63,7 +63,7 @@ pub fn client() -> Result<reqwest::Client> {
     Ok(builder().build()?)
 }
 
-/// Whether an address is out on the internet, rather than this machine, the
+/// Whether an address is out on the internet, rather than loopback, the
 /// local network, a VPN's range (CGNAT, which Tailscale uses) or a range
 /// set aside for something else.
 pub fn is_public(ip: IpAddr) -> bool {
@@ -95,23 +95,70 @@ pub fn is_public(ip: IpAddr) -> bool {
             if s[..6] == [0x64, 0xff9b, 0, 0, 0, 0] {
                 return is_public(embedded().into());
             }
+            // 6to4 carries an IPv4 address in its prefix, and a relay
+            // delivers to it.
+            if s[0] == 0x2002 {
+                return is_public(Ipv4Addr::from((u32::from(s[1]) << 16) | u32::from(s[2])).into());
+            }
             !(ip.is_multicast()
                 // Unspecified, loopback and IPv4-compatible.
                 || s[..6] == [0; 6]
-                // Unique local, link-local and documentation.
+                // Unique local, link-local, the old site-local and
+                // documentation.
                 || s[0] & 0xfe00 == 0xfc00
                 || s[0] & 0xffc0 == 0xfe80
-                || (s[0] == 0x2001 && s[1] == 0xdb8))
+                || s[0] & 0xffc0 == 0xfec0
+                || (s[0] == 0x2001 && s[1] == 0xdb8)
+                // Teredo, a tunnel whose far end the address doesn't show.
+                || (s[0] == 0x2001 && s[1] == 0)
+                // Local-use NAT64 (RFC 8215), which reaches whatever the
+                // network's own translator is set up for.
+                || s[..3] == [0x64, 0xff9b, 1]
+                // Discard-only.
+                || s[..4] == [0x100, 0, 0, 0])
         }
     }
+}
+
+/// Whether an address is one of this machine's own, on any interface. A
+/// server with a public address would otherwise reach its own services
+/// that way, as if from the internet but past any firewall in between.
+/// Looked up each time, so addresses that change are still caught.
+pub fn is_own(ip: IpAddr) -> bool {
+    let canonical = |ip: IpAddr| match ip {
+        IpAddr::V6(v6) => v6.to_ipv4_mapped().map_or(ip, IpAddr::V4),
+        IpAddr::V4(_) => ip,
+    };
+    let ip = canonical(ip);
+    match nix::ifaddrs::getifaddrs() {
+        Ok(addrs) => addrs
+            .filter_map(|a| a.address)
+            .filter_map(|a| {
+                a.as_sockaddr_in()
+                    .map(|v4| IpAddr::V4(v4.ip()))
+                    .or_else(|| a.as_sockaddr_in6().map(|v6| IpAddr::V6(v6.ip())))
+            })
+            .any(|own| canonical(own) == ip),
+        Err(e) => {
+            // Refuse rather than risk it: the fetch fails and is retried.
+            warn!("listing this machine's addresses: {e}");
+            true
+        }
+    }
+}
+
+/// Whether a URL fetched for a feed may connect to an address: public, and
+/// not this machine's.
+fn allowed(ip: IpAddr) -> bool {
+    is_public(ip) && !is_own(ip)
 }
 
 /// Whether a URL names a non-public address outright (`http://10.0.0.1/`).
 /// Host names are checked when they are resolved, by [`PublicOnly`].
 fn names_private_address(url: &reqwest::Url) -> bool {
     match url.host() {
-        Some(url::Host::Ipv4(ip)) => !is_public(ip.into()),
-        Some(url::Host::Ipv6(ip)) => !is_public(ip.into()),
+        Some(url::Host::Ipv4(ip)) => !allowed(ip.into()),
+        Some(url::Host::Ipv6(ip)) => !allowed(ip.into()),
         Some(url::Host::Domain(_)) | None => false,
     }
 }
@@ -129,7 +176,7 @@ impl reqwest::dns::Resolve for PublicOnly {
             let host = name.as_str();
             let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host, 0))
                 .await?
-                .filter(|a| is_public(a.ip()))
+                .filter(|a| allowed(a.ip()))
                 .collect();
             if addrs.is_empty() {
                 return Err(format!("{host} is {NOT_PUBLIC}").into());
@@ -1244,9 +1291,46 @@ mod tests {
             ("fe80::1", false),
             ("ff02::1", false),
             ("2001:db8::1", false),
+            // 6to4 is as public as the IPv4 address it carries.
+            ("2002:5db8:d822::1", true),
+            ("2002:a00:1::1", false),
+            ("2002:c0a8:101::1", false),
+            ("2002:7f00:1::1", false),
+            ("2001::1", false),
+            ("2001:0:4136:e378:8000:63bf:3fff:fdd2", false),
+            ("2001:4860:4860::8888", true),
+            ("fec0::1", false),
+            ("feff::1", false),
+            ("64:ff9b:1::a00:1", false),
+            ("64:ff9b:2::1", true),
+            ("100::1", false),
         ] {
             assert_eq!(is_public(ip.parse().unwrap()), public, "{ip}");
         }
+    }
+
+    #[test]
+    fn knows_this_machines_own_addresses() {
+        let own: Vec<IpAddr> = nix::ifaddrs::getifaddrs()
+            .unwrap()
+            .filter_map(|a| a.address)
+            .filter_map(|a| {
+                a.as_sockaddr_in()
+                    .map(|v4| IpAddr::V4(v4.ip()))
+                    .or_else(|| a.as_sockaddr_in6().map(|v6| IpAddr::V6(v6.ip())))
+            })
+            .collect();
+        assert!(!own.is_empty(), "loopback at least");
+        for ip in &own {
+            assert!(is_own(*ip), "{ip}");
+            assert!(!allowed(*ip), "{ip}");
+            if let IpAddr::V4(v4) = ip {
+                assert!(is_own(IpAddr::V6(v4.to_ipv6_mapped())), "mapped {ip}");
+            }
+        }
+        // An address no test machine has.
+        let elsewhere: IpAddr = "93.184.216.34".parse().unwrap();
+        assert!(!is_own(elsewhere) && allowed(elsewhere));
     }
 
     #[tokio::test]
