@@ -28,9 +28,9 @@
     "type": "github",
     "owner": "nix-community",
     "repo": "fenix",
-    "rev": "e1d61eced75126471e69a90f58502c138e50014a",
-    "narHash": "sha256-49zoYsywWHYYXhw2RYhWWwGlATaDejGSVwVgDFoqvTE=",
-    "lastModified": 1795796693,
+    "rev": "609e13405ef28bce28bde1715bed15f6585e8ef5",
+    "narHash": "sha256-QAqbRlrmBFayVaAGr+vV/1iU5aVgot96FqTsX/7NdKw=",
+    "lastModified": 1795879074,
     "public": true
   },
   "nix-wrapper-modules": {
@@ -46,9 +46,9 @@
     "type": "github",
     "owner": "nixos",
     "repo": "nixpkgs",
-    "rev": "2786a2a72088ecf32aea5b3ec52099e6a7cff78f",
-    "narHash": "sha256-f/VVvxf5RsQgWVhUtefoca5ktVg0DA2bnkMOcmSnozo=",
-    "lastModified": 1795234589,
+    "rev": "78cc855faf4382e44b781c23bf9f456b924ef0e2",
+    "narHash": "sha256-lyvlcjA/bJySrgwKiEoIYFNkDJM6aOck6/9gGRm9He4=",
+    "lastModified": 1795761588,
     "public": true
   }
 }
