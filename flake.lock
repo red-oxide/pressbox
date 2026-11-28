@@ -27,11 +27,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1795673280,
-        "narHash": "sha256-VimQ5ukl6QmLR+29wipVvnu6OK91VY6Z5vjz/QXzZhc=",
+        "lastModified": 1795789330,
+        "narHash": "sha256-rnoUuzo9o5V+arFWNK0yQFuASwozFkEJxlhc/G0cTBs=",
         "owner": "red-oxide",
         "repo": "devfmt",
-        "rev": "aa4bd98775d710c016059e419b35fb3526d62bdb",
+        "rev": "cc00de59e32642f43510ac1f31ce8169cee4544e",
         "type": "github"
       },
       "original": {
@@ -48,11 +48,11 @@
         "rust-analyzer-src": "rust-analyzer-src"
       },
       "locked": {
-        "lastModified": 1795711196,
-        "narHash": "sha256-3y7g6HcL3Mx4vOsGR42aDqGmc7yxzodB7lFupBVuglo=",
+        "lastModified": 1795796693,
+        "narHash": "sha256-49zoYsywWHYYXhw2RYhWWwGlATaDejGSVwVgDFoqvTE=",
         "owner": "nix-community",
         "repo": "fenix",
-        "rev": "bd6a1aca2abf2c8d754447f7bd37624b69ba1b17",
+        "rev": "e1d61eced75126471e69a90f58502c138e50014a",
         "type": "github"
       },
       "original": {
