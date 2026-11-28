@@ -19,9 +19,9 @@
     "type": "github",
     "owner": "red-oxide",
     "repo": "devfmt",
-    "rev": "cc00de59e32642f43510ac1f31ce8169cee4544e",
-    "narHash": "sha256-rnoUuzo9o5V+arFWNK0yQFuASwozFkEJxlhc/G0cTBs=",
-    "lastModified": 1795789330,
+    "rev": "664022d4a28d7d76908bdf260917b07562a014e6",
+    "narHash": "sha256-Et7veXW2GzMahrjEmwdfOUfJSmifFZ1wS9sMXoPR384=",
+    "lastModified": 1795867951,
     "public": true
   },
   "fenix": {
