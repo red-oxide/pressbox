@@ -25,6 +25,11 @@
       url = "github:red-oxide/devfmt";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # For the clients' wrapper modules (wrapperModules.*, wrappers.*).
+    nix-wrapper-modules = {
+      url = "github:nix-community/nix-wrapper-modules";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =

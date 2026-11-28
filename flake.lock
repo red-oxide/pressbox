@@ -98,6 +98,26 @@
         "type": "github"
       }
     },
+    "nix-wrapper-modules": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1795484136,
+        "narHash": "sha256-F6ZSjFLSS6F3vv71/fIr7PLxQQZHuEcCIVBYDfIis2I=",
+        "owner": "nix-community",
+        "repo": "nix-wrapper-modules",
+        "rev": "dd4d2130b3e1df56837b11a9be025fcd2774030c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "nix-wrapper-modules",
+        "type": "github"
+      }
+    },
     "nixfmt-rs": {
       "inputs": {
         "nixpkgs": [
@@ -145,6 +165,7 @@
         "crane": "crane",
         "devfmt": "devfmt",
         "fenix": "fenix",
+        "nix-wrapper-modules": "nix-wrapper-modules",
         "nixpkgs": "nixpkgs"
       }
     },
