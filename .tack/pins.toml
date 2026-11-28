@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: 2026 Chris Palmer <chris@red-oxide.org>
+# SPDX-License-Identifier: GPL-3.0-only
+
+# tack pins. `tack update` relocks pins.lock.json; nix only reads the lock.
+# https://github.com/manic-systems/tack
+
+[inputs.nixpkgs]
+url = "github:nixos/nixpkgs/nixos-unstable"
+
+[inputs.crane]
+url = "github:ipetkov/crane"
+
+[inputs.fenix]
+follows = { nixpkgs = "nixpkgs" }
+url     = "github:nix-community/fenix"
+
+[inputs.devfmt]
+follows = { nixpkgs = "nixpkgs" }
+url     = "github:red-oxide/devfmt"
+
+# For the clients' wrapper modules (wrapperModules.*, wrappers.*).
+[inputs.nix-wrapper-modules]
+follows = { nixpkgs = "nixpkgs" }
+url     = "github:nix-community/nix-wrapper-modules"

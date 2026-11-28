@@ -9,12 +9,13 @@ Add the flake to your system configuration:
 
 ```nix
 {
-  inputs.pressbox = {
-    url = "github:red-oxide/pressbox";
-    inputs.nixpkgs.follows = "nixpkgs";
-  };
+  inputs.pressbox.url = "github:red-oxide/pressbox";
 }
 ```
+
+pressbox pins its own inputs with [tack](https://github.com/manic-systems/tack)
+rather than flake inputs, so there is nothing to `follows`. It builds with its
+own nixpkgs, which is what the red-oxide Cachix cache has builds for.
 
 Then import `inputs.pressbox.nixosModules.default` and declare your feeds:
 

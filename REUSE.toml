@@ -3,11 +3,19 @@
 
 # Licensing for files that cannot carry a header. See https://reuse.software.
 # The server (crates/pressboxd, modules/nixos.nix) is AGPL-3.0-only; the logo
-# is CC-BY-SA-4.0; the terminal and desktop clients, shared types, build files
+# is CC-BY-SA-4.0; tack's vendored resolver (.tack/default.nix) is EUPL-1.2; the terminal and desktop clients, shared types, build files
 # and docs are GPL-3.0-only. Each file's own SPDX header says which.
 version = 1
 
 [[annotations]]
 SPDX-FileCopyrightText  = "2026 Chris Palmer <chris@red-oxide.org>"
 SPDX-License-Identifier = "GPL-3.0-only"
-path                    = ["Cargo.lock", "docs/openapi.json", "flake.lock"]
+path                    = ["Cargo.lock", "docs/openapi.json", ".tack/.gitignore", ".tack/pins.lock.json"]
+
+# tack's vendored resolver (`tack init` writes it; its header carries only the
+# license).
+[[annotations]]
+SPDX-FileCopyrightText  = "The tack contributors <https://github.com/manic-systems/tack>"
+SPDX-License-Identifier = "EUPL-1.2"
+path                    = ".tack/default.nix"
+precedence              = "aggregate"

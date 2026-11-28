@@ -3,6 +3,9 @@
 
 set dotenv-load := false
 
+# Every input is a tack pin (.tack/pins.toml); nixpkgs only packages tack 1.0.x
+tack := "nix run github:manic-systems/tack/v2.0.0 --"
+
 # Cargo comes from the dev shell: use it directly inside `nix develop` (or
 # direnv), and run it through `nix develop` otherwise.
 cargo := if env("IN_NIX_SHELL", "") == "" { "nix develop --command cargo" } else { "cargo" }
@@ -81,13 +84,13 @@ fmt:
 fmt-check:
     nix build --no-link ".#checks.$(nix eval --impure --raw --expr builtins.currentSystem).treefmt"
 
-# Update all flake inputs
+# Update every tack pin (.tack/pins.toml)
 update:
-    nix flake update
+    {{ tack }} update
 
-# Update a specific flake input
-update-input input:
-    nix flake update {{ input }}
+# Update specific pins, e.g. `just update-input nixpkgs fenix`
+update-input +inputs:
+    {{ tack }} update {{ inputs }}
 
 # Everything CI checks
 verify: fmt-check lint test deny check

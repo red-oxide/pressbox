@@ -1,0 +1,54 @@
+{
+  "$declared": {
+    "crane": "github:ipetkov/crane",
+    "devfmt": "github:red-oxide/devfmt",
+    "fenix": "github:nix-community/fenix",
+    "nix-wrapper-modules": "github:nix-community/nix-wrapper-modules",
+    "nixpkgs": "github:nixos/nixpkgs/nixos-unstable"
+  },
+  "crane": {
+    "type": "github",
+    "owner": "ipetkov",
+    "repo": "crane",
+    "rev": "95e62def851e9d650f0eab63cb4f59a3306e20bd",
+    "narHash": "sha256-zrweT2tXbcWiJMACOhOr2eYFJKVa6g59ouRaZ3BS5Do=",
+    "lastModified": 1794962885,
+    "public": true
+  },
+  "devfmt": {
+    "type": "github",
+    "owner": "red-oxide",
+    "repo": "devfmt",
+    "rev": "cc00de59e32642f43510ac1f31ce8169cee4544e",
+    "narHash": "sha256-rnoUuzo9o5V+arFWNK0yQFuASwozFkEJxlhc/G0cTBs=",
+    "lastModified": 1795789330,
+    "public": true
+  },
+  "fenix": {
+    "type": "github",
+    "owner": "nix-community",
+    "repo": "fenix",
+    "rev": "e1d61eced75126471e69a90f58502c138e50014a",
+    "narHash": "sha256-49zoYsywWHYYXhw2RYhWWwGlATaDejGSVwVgDFoqvTE=",
+    "lastModified": 1795796693,
+    "public": true
+  },
+  "nix-wrapper-modules": {
+    "type": "github",
+    "owner": "nix-community",
+    "repo": "nix-wrapper-modules",
+    "rev": "dd4d2130b3e1df56837b11a9be025fcd2774030c",
+    "narHash": "sha256-F6ZSjFLSS6F3vv71/fIr7PLxQQZHuEcCIVBYDfIis2I=",
+    "lastModified": 1795484136,
+    "public": true
+  },
+  "nixpkgs": {
+    "type": "github",
+    "owner": "nixos",
+    "repo": "nixpkgs",
+    "rev": "2786a2a72088ecf32aea5b3ec52099e6a7cff78f",
+    "narHash": "sha256-f/VVvxf5RsQgWVhUtefoca5ktVg0DA2bnkMOcmSnozo=",
+    "lastModified": 1795234589,
+    "public": true
+  }
+}
