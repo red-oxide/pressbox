@@ -39,7 +39,8 @@ own releases.
 
 ### Project
 
-- Both clients are [nix-wrapper-modules](https://github.com/nix-community/nix-wrapper-modules)
+- Both clients are
+  [nix-wrapper-modules](https://github.com/nix-community/nix-wrapper-modules)
   wrappers (`wrappers.pressbox`, `wrappers.pressbox-iced`, and
   `wrapperModules.*`), with the Home Manager module's settings baked in, for
   using them without Home Manager.

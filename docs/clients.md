@@ -44,8 +44,8 @@ environment.systemPackages = [
 ];
 ```
 
-The wrappers set `PRESSBOX_SERVER` (and `PRESSBOX_TOKEN_FILE`, if `tokenFile`
-is set), which both clients read before `client.json`. Pairing works as above.
+The wrappers set `PRESSBOX_SERVER` (and `PRESSBOX_TOKEN_FILE`, if `tokenFile` is
+set), which both clients read before `client.json`. Pairing works as above.
 Birdland's bar reads the same variables, but from its own environment: set
 `environment.sessionVariables.PRESSBOX_SERVER` too if you use its feeds
 indicator. `wrapperModules.pressbox` and `wrapperModules.pressbox-iced` are the
@@ -55,7 +55,8 @@ same wrappers as importable modules.
 
 `pressbox [--server URL] [--token-file PATH] [--config PATH]`. Flags and the
 `PRESSBOX_SERVER` / `PRESSBOX_TOKEN_FILE` environment variables override
-`client.json` (pressbox-iced reads the same variables). `pressbox pair [--name NAME]` pairs this machine;
+`client.json` (pressbox-iced reads the same variables).
+`pressbox pair [--name NAME]` pairs this machine;
 `pressbox approve [CODE] [--user U]` approves (or lists) other devices'
 requests, and `pressbox whoami` shows the signed-in user and device.
 
