@@ -8,9 +8,14 @@
 version = 1
 
 [[annotations]]
-SPDX-FileCopyrightText  = "2026 Chris Palmer <chris@red-oxide.org>"
+SPDX-FileCopyrightText = "2026 Chris Palmer <chris@red-oxide.org>"
 SPDX-License-Identifier = "GPL-3.0-only"
-path                    = ["Cargo.lock", "docs/openapi.json", ".tack/.gitignore", ".tack/pins.lock.json"]
+path = [
+  "Cargo.lock",
+  "docs/openapi.json",
+  ".tack/.gitignore",
+  ".tack/pins.lock.json",
+]
 
 # tack's vendored resolver (`tack init` writes it; its header carries only the
 # license).

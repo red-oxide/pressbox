@@ -47,8 +47,8 @@ own releases.
 
 - Nix inputs are pinned with [tack](https://github.com/manic-systems/tack) in
   `.tack/` instead of flake inputs, and `flake.lock` is gone. Flakes using
-  pressbox should drop any `pressbox.inputs.*.follows`; pressbox builds with
-  its own nixpkgs, which the red-oxide Cachix cache has builds for. A daily
+  pressbox should drop any `pressbox.inputs.*.follows`; pressbox builds with its
+  own nixpkgs, which the red-oxide Cachix cache has builds for. A daily
   `update-pins` workflow (`tack update`) replaces `update-flake-lock`.
 
 ### Security
