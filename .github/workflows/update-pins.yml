@@ -1,0 +1,67 @@
+# SPDX-FileCopyrightText: 2026 Chris Palmer <chris@red-oxide.org>
+# SPDX-License-Identifier: GPL-3.0-only
+
+name: Update tack pins
+
+# Every input (nixpkgs, crane, fenix, devfmt, nix-wrapper-modules) is a tack
+# pin in .tack/pins.toml. Relock them daily and open a PR when anything
+# moved.
+
+on:
+  schedule:
+    - cron: "30 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update-pins:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # tack comes from our own cache: the first run builds it and pushes it
+      # to red-oxide, later runs pull it from there.
+      - name: Set up Cachix
+        uses: cachix/cachix-action@v16
+        with:
+          name: red-oxide
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Update pins
+        id: update
+        run: |
+          out=$(nix run github:manic-systems/tack/v2.0.0 -- update 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
+          echo "$out"
+          {
+            echo "summary<<EOF"
+            echo "$out"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check the flake still evaluates
+        run: nix flake check --no-build
+
+      - name: Open pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: update-pins
+          delete-branch: true
+          commit-message: "chore(tack): update pins"
+          title: "chore(tack): update pins"
+          body: |
+            `tack update` moved these pins:
+
+            ```
+            ${{ steps.update.outputs.summary }}
+            ```

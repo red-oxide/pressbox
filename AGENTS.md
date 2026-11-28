@@ -60,9 +60,10 @@ the dev shell.
   `crates/pressboxd/src/db.rs`. Never edit an existing migration.
 - **Module options.** If you add or change an option in `modules/`, update
   `docs/server.md` or `docs/clients.md` to match.
-- **Dependencies.** Don't add crates or run `nix flake update` / `cargo update`
-  unless asked. A new crate must pass `just deny`; don't loosen `deny.toml` to
-  make it pass.
+- **Dependencies.** Don't add crates or pins, or run `just update`
+  (`tack update`) / `cargo update`, unless asked. Nix inputs are tack pins in
+  `.tack/pins.toml`, not flake inputs. A new crate must pass `just deny`; don't
+  loosen `deny.toml` to make it pass.
 - **Changelog.** Record user-visible changes in `CHANGELOG.md` (Keep a
   Changelog, CalVer `YY.MINOR.PATCH`). Leave version bumps, tags and
   `just release` to the maintainer.
