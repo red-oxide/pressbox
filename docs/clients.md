@@ -24,11 +24,38 @@ both.
 Set `desktop.enable = true` to also install `pressbox-iced`, the desktop client,
 and `tui.enable = false` to leave out the terminal one.
 
+## Clients (wrapper modules)
+
+Without Home Manager, both clients are also
+[nix-wrapper-modules](https://github.com/nix-community/nix-wrapper-modules)
+wrappers, with the same settings baked into the package:
+
+```nix
+environment.systemPackages = [
+  (inputs.pressbox.wrappers.pressbox.wrap {
+    inherit pkgs;
+    server = "https://pressbox.your-tailnet.ts.net";
+    player = lib.getExe pkgs.mpv; # optional
+  })
+  (inputs.pressbox.wrappers.pressbox-iced.wrap {
+    inherit pkgs;
+    server = "https://pressbox.your-tailnet.ts.net";
+  })
+];
+```
+
+The wrappers set `PRESSBOX_SERVER` (and `PRESSBOX_TOKEN_FILE`, if `tokenFile`
+is set), which both clients read before `client.json`. Pairing works as above.
+Birdland's bar reads the same variables, but from its own environment: set
+`environment.sessionVariables.PRESSBOX_SERVER` too if you use its feeds
+indicator. `wrapperModules.pressbox` and `wrapperModules.pressbox-iced` are the
+same wrappers as importable modules.
+
 ### pressbox (terminal client)
 
 `pressbox [--server URL] [--token-file PATH] [--config PATH]`. Flags and the
 `PRESSBOX_SERVER` / `PRESSBOX_TOKEN_FILE` environment variables override
-`client.json`. `pressbox pair [--name NAME]` pairs this machine;
+`client.json` (pressbox-iced reads the same variables). `pressbox pair [--name NAME]` pairs this machine;
 `pressbox approve [CODE] [--user U]` approves (or lists) other devices'
 requests, and `pressbox whoami` shows the signed-in user and device.
 

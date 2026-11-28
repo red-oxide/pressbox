@@ -45,6 +45,28 @@ impl ClientConfig {
         }
     }
 
+    /// `PRESSBOX_SERVER` and `PRESSBOX_TOKEN_FILE` override the file, as
+    /// they do for the terminal client and Birdland's bar, so session
+    /// variables or a wrapper can set them without a `client.json`. Empty
+    /// values are ignored.
+    pub fn with_overrides(mut self, server: Option<String>, token_file: Option<PathBuf>) -> Self {
+        if let Some(server) = server.filter(|s| !s.is_empty()) {
+            self.server = Some(server);
+        }
+        if let Some(path) = token_file.filter(|p| !p.as_os_str().is_empty()) {
+            self.token_file = Some(path);
+        }
+        self
+    }
+
+    /// [`Self::with_overrides`] from the environment.
+    pub fn with_env_overrides(self) -> Self {
+        self.with_overrides(
+            std::env::var("PRESSBOX_SERVER").ok(),
+            std::env::var_os("PRESSBOX_TOKEN_FILE").map(PathBuf::from),
+        )
+    }
+
     /// The token file this config points at, or the default one.
     pub fn token_path(&self) -> Option<PathBuf> {
         self.token_file.clone().or_else(Self::default_token_path)
@@ -67,11 +89,13 @@ pub struct Session {
 }
 
 /// Loads the saved session: the server from `client.json` at `path` (an
-/// unreadable file counts as empty) and its token.
+/// unreadable file counts as empty, and `PRESSBOX_SERVER` /
+/// `PRESSBOX_TOKEN_FILE` override it) and its token.
 pub fn load_session(path: Option<&Path>) -> (ClientConfig, Option<Session>) {
     let config = path
         .and_then(|p| ClientConfig::load(p).ok())
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .with_env_overrides();
     let session = match (&config.server, config.token()) {
         (Some(server), Some(token)) => Some(Session {
             server: server.clone(),
@@ -183,6 +207,27 @@ mod tests {
             assert_eq!(mode & 0o777, 0o600);
         }
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn environment_overrides_the_file() {
+        let file = ClientConfig {
+            server: Some("https://file.example".into()),
+            token_file: Some("/file/token".into()),
+        };
+        let both = file.clone().with_overrides(
+            Some("https://env.example".into()),
+            Some("/env/token".into()),
+        );
+        assert_eq!(both.server.as_deref(), Some("https://env.example"));
+        assert_eq!(both.token_file.as_deref(), Some(Path::new("/env/token")));
+        // Unset or empty values leave the file's alone.
+        assert_eq!(file.clone().with_overrides(None, None), file);
+        assert_eq!(
+            file.clone()
+                .with_overrides(Some(String::new()), Some(PathBuf::new())),
+            file
+        );
     }
 
     #[test]

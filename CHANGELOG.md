@@ -32,6 +32,18 @@ own releases.
   types in `pressbox-api` (`ErrorResponse`, `PairPending`). Their JSON is
   unchanged.
 
+### Desktop client
+
+- `PRESSBOX_SERVER` and `PRESSBOX_TOKEN_FILE` override `client.json`, as they
+  already did for the terminal client.
+
+### Project
+
+- Both clients are [nix-wrapper-modules](https://github.com/nix-community/nix-wrapper-modules)
+  wrappers (`wrappers.pressbox`, `wrappers.pressbox-iced`, and
+  `wrapperModules.*`), with the Home Manager module's settings baked in, for
+  using them without Home Manager.
+
 ### Security
 
 - Pairing: the per-client limit on waiting requests counts an IPv6 /64 as one
